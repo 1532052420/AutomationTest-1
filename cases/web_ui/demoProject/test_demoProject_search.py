@@ -1,4 +1,8 @@
 # -*- coding:utf8 -*-
+# 作者 1532052420
+# 创建时间 2018/01/19 22:36
+# 文件名 tee.py
+# github https://github.com/1532052420
 from base.web_ui.demoProject.web_ui_demoProject_client import WEB_UI_DemoProject_Client
 from page_objects.web_ui.demoProject.pages.indexPage import IndexPage
 from assertpy import assert_that

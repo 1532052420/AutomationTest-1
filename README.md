@@ -1,3 +1,6 @@
+
+[![Stargazers over time](https://starchart.cc/1532052420/AutomationTest.svg)](https://starchart.cc/1532052420/AutomationTest)
+
 ![avatar](https://github.com/1532052420/resources/blob/master/APIAutomationTest/report.png)
 
 # [自动化测试]()

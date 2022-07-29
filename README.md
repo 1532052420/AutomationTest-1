@@ -326,3 +326,5 @@
 
 
 [![Stargazers over time](https://starchart.cc/1532052420/AutomationTest.svg)](https://starchart.cc/1532052420/AutomationTest)
+
+[![Top Langs](https://profile-counter.glitch.me/1532052420/count.svg)](https://github.com/1532052420)

@@ -1,6 +1,3 @@
-# [进交流群]()
-![avatar](https://github.com/1532052420/resources/blob/master/wechat.png =200x200)
-
 ![avatar](https://github.com/1532052420/resources/blob/master/APIAutomationTest/report.png)
 
 # [自动化测试]()
@@ -336,7 +333,7 @@
     * 设备屏幕坐标系原点都在最左上角，往右x轴递增，往下y轴递增
 
 # [进交流群]()
-![avatar](https://github.com/1532052420/resources/blob/master/wechat.png)
+![avatar](https://github.com/1532052420/resources/blob/master/wechat.png =200x)
 
 
 [![Stargazers over time](https://starchart.cc/1532052420/AutomationTest.svg)](https://starchart.cc/1532052420/AutomationTest)

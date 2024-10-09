@@ -1,3 +1,6 @@
+# [进交流群]()
+![avatar](https://github.com/1532052420/resources/blob/master/wechat.png =200x200)
+
 ![avatar](https://github.com/1532052420/resources/blob/master/APIAutomationTest/report.png)
 
 # [自动化测试]()

@@ -1,4 +1,8 @@
-![avatar](https://github.com/1532052420/resources/blob/master/APIAutomationTest/report.png)
+# [赞助商]()
+：可靠且性价比高的海外代理IP提供商。为企业和开发者提供稳定、高效的海外代理 IP 服务。注册即可免费试用1GB住宅代理，并获得 2000 次免费 SERP API 调用。
+<a href="https://www..com/?ls=github&lk=automationtest">
+    <img src="https://github.com/1532052420/resources/blob/master/APIAutomationTest/.png" alt="">
+</a>
 
 # [自动化测试]()
 

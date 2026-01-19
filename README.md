@@ -1,6 +1,6 @@
 ### [感谢]()
 ：可靠且性价比高的海外代理IP提供商。为企业和开发者提供稳定、高效的海外代理 IP 服务。注册即可免费试用1GB住宅代理，并获得 2000 次免费 SERP API 调用。
-<a href="https://www..com/?ls=github&lk=automationtest" target="_blank">
+<a href="https://www..com/?ls=github&lk=automationtest" target="_blank" onclick="window.open(this.href); return false;">
     <img src="https://github.com/1532052420/resources/blob/master/APIAutomationTest/.png" alt="">
 </a>
 

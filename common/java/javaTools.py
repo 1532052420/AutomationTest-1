@@ -8,6 +8,10 @@ import jpype
 
 class JavaTool:
 
+    # slf4j-log4j12(绑定) 与 libs 中已有的 log4j-over-slf4j(桥接) 并存会触发
+    # slf4j 绑定死循环检测，JVM 内 Tess4j 初始化直接失败，构建 classpath 时必须排除
+    EXCLUDED_JARS = ('slf4j-log4j12',)
+
     @classmethod
     def getAllJar(cls):
         split_flag=':'
@@ -18,7 +22,7 @@ class JavaTool:
         path=os.walk(libpath)
         for dirpath,dirname,filenames in path:
             for filename in filenames:
-                if filename.endswith('.jar'):
+                if filename.endswith('.jar') and not any(x in filename for x in cls.EXCLUDED_JARS):
                     filepath=os.path.join(dirpath,filename)
                     result=result+split_flag+filepath
         return result.lstrip(split_flag)

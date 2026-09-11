@@ -39,6 +39,10 @@ def _no_cache(resp):
 from web_platform.routes import bp as platform_bp
 app.register_blueprint(platform_bp)
 
+# 代码审查（框架调试）：独立蓝图，纯增量，详见 代码调试/ 目录
+from web_platform.debug_routes import bp as debug_bp
+app.register_blueprint(debug_bp)
+
 
 if __name__ == '__main__':
     print('App UI 自动化测试平台已启动: http://127.0.0.1:%d/' % PLATFORM_CFG.port)

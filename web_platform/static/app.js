@@ -17,7 +17,20 @@ function esc(s) {
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
-function statusBadge(st) { return '<span class="status st-' + esc(st) + '">' + esc(st) + '</span>'; }
+/* 状态徽章：run 状态为大写（PASSED…），用例/步骤状态来自 allure 为小写（passed…），
+   统一转大写复用同一套 .st-* 样式；broken→ERROR、skipped/unknown→PENDING */
+function statusBadge(st) {
+  const s = String(st == null ? '' : st).toUpperCase();
+  const cls = { BROKEN: 'ERROR', SKIPPED: 'PENDING', UNKNOWN: 'PENDING' }[s] || s;
+  return '<span class="status st-' + esc(cls) + '">' + esc(s) + '</span>';
+}
+/* run 统计：带标签的 通过/失败/异常 三个数值 */
+function runStatsHtml(t) {
+  return '<span>共 <b>' + (t.total || 0) + '</b> 条</span>' +
+    '<span>通过 <b class="num-ok">' + (t.passed || 0) + '</b></span>' +
+    '<span>失败 <b class="num-bad">' + (t.failed || 0) + '</b></span>' +
+    '<span>异常 <b class="num-err">' + (t.error || 0) + '</b></span>';
+}
 function fmtTime(s) { return s ? String(s).replace('T', ' ').slice(0, 19) : '-'; }
 
 let _toastTimer = null;
@@ -119,7 +132,7 @@ function runRowHtml(r, withOps) {
     '<td>' + fmtTime(r.start_time) + '</td>' +
     '<td title="' + esc(dev) + ' · ' + esc(r.udid || '') + '">' + esc(dev) + '</td>' +
     '<td title="' + esc(r.app_package) + '">' + esc((r.app_package || '-').split('.').pop()) + '</td>' +
-    '<td><b>' + r.total + '</b> / <span style="color:#059669">' + r.passed + '</span> / <span style="color:#dc2626">' + r.failed + '</span></td>' +
+    '<td><b>' + r.total + '</b> / <span style="color:#4ade80">' + r.passed + '</span> / <span style="color:#ff8787">' + r.failed + '</span></td>' +
     '<td>' + statusBadge(r.status) + '</td>' +
     (withOps ? '<td><div class="ops">' +
       '<a class="btn ghost mini" style="text-decoration:none" href="/runs/' + esc(r.run_id) + '">详情</a>' +
@@ -242,7 +255,7 @@ async function loadExecDefaults(conf) {
     '<span class="pill ' + (d.defaults.udid ? 'ok' : 'bad') + '">' + (d.defaults.udid ? '● 设备在线' : '● 无在线设备') + '</span>' +
     '<span>设备 <b>' + esc(d.defaults.udid || '-') + '</b></span>' +
     '<span>型号 <b>' + esc(d.defaults.model || '-') + '</b></span>' +
-    '<span>Appium <b>' + (d.defaults.appium_ok ? '<span style="color:#059669">正常</span>' : '<span style="color:#dc2626">不可用</span>') + '</b></span>' +
+    '<span>Appium <b>' + (d.defaults.appium_ok ? '<span style="color:#4ade80">正常</span>' : '<span style="color:#ff8787">不可用</span>') + '</b></span>' +
     '<span>服务 <b>' + esc(d.defaults.server || '-') + '</b></span>' +
     (d.defaults.occupied ? '<span class="pill bad">有任务执行中</span>' : '');
 }
@@ -314,7 +327,7 @@ function pollTask(runId) {
     const t = d.task;
     $('#runIdNow').textContent = t.run_id;
     $('#runStatusNow').innerHTML = statusBadge(t.status);
-    $('#runStatsNow').textContent = '共 ' + t.total + ' · 通过 ' + t.passed + ' · 失败 ' + t.failed + (t.error ? ' · 错误 ' + t.error : '');
+    $('#runStatsNow').textContent = '共 ' + t.total + ' · 通过 ' + t.passed + ' · 失败 ' + t.failed + ' · 异常 ' + (t.error || 0);
     const done = t.passed + t.failed + t.error + t.skipped;
     $('#runProgress').style.width = (t.total ? Math.min(100, Math.round(done / t.total * 100)) : 0) + '%';
     $('#btnStop').disabled = !(t.status === 'RUNNING' || t.status === 'PENDING');
@@ -425,9 +438,9 @@ async function renderRunDetail(sel, runId) {
     '<span>设备 <b>' + esc(t.device_model || t.device_desc) + ' / ' + esc(t.udid) + '</b></span>' +
     '<span>App <b>' + esc(t.app_package) + '</b></span>' +
     '<span>开始 <b>' + fmtTime(t.start_time) + '</b></span>' +
-    '<span>统计 <b>' + t.total + ' / ' + t.passed + ' / ' + t.failed + '</b></span>' +
+    runStatsHtml(t) +
     (running ? '<span class="pill ok">执行中</span>' : '') + '</div>' +
-    (t.error_msg ? '<p class="mt" style="color:#dc2626">' + esc(t.error_msg) + '</p>' : '') +
+    (t.error_msg ? '<p class="mt" style="color:#ff8787">' + esc(t.error_msg) + '</p>' : '') +
     (cases.length ? '<div class="tblwrap mt"><table><thead><tr><th></th><th>用例</th><th>结果</th><th>耗时</th><th>截图</th></tr></thead><tbody>' +
       cases.map((c2, i) => caseRowHtml(runId, c2, i)).join('') +
       '</tbody></table></div>' :
@@ -462,7 +475,7 @@ async function renderRunDetail(sel, runId) {
           tb.innerHTML = '<span>状态 ' + statusBadge(t2.status) + '</span>' +
             '<span>设备 <b>' + esc(t2.device_model || t2.device_desc) + ' / ' + esc(t2.udid) + '</b></span>' +
             '<span>App <b>' + esc(t2.app_package) + '</b></span>' +
-            '<span>统计 <b>' + t2.total + ' / ' + t2.passed + ' / ' + t2.failed + '</b></span>' +
+            runStatsHtml(t2) +
             '<span class="pill ok">执行中</span>';
         }
       }
@@ -513,7 +526,7 @@ async function loadReportList() {
     '<td>' + fmtTime(r.start_time) + '</td>' +
     '<td>' + statusBadge(r.status) + '</td>' +
     '<td class="muted">' + esc(r.allure_dir || '-') + '</td>' +
-    '<td>' + (r.report_dir ? '<span style="color:#059669">已生成</span>' : '<span class="muted">未生成</span>') + '</td>' +
+    '<td>' + (r.report_dir ? '<span style="color:#4ade80">已生成</span>' : '<span class="muted">未生成</span>') + '</td>' +
     '<td><div class="ops">' +
     '<button class="ghost mini" onclick="showRunDetail(\'' + esc(r.run_id) + '\')">详情</button>' +
     '<button class="ghost mini" onclick="openReportFor(\'' + esc(r.run_id) + '\', this)">打开报告</button>' +

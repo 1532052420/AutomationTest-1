@@ -14,7 +14,7 @@ from page_objects.app_ui.locator_type import Locator_Type
 from page_objects.app_ui.wait_type import Wait_Type  as Wait_By
 from pojo.elementInfo import ElementInfo
 from PIL import Image
-from selenium.common.exceptions import StaleElementReferenceException
+from selenium.common.exceptions import StaleElementReferenceException, TimeoutException
 from selenium.webdriver.support.ui import Select
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions

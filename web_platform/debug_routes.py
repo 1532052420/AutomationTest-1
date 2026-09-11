@@ -24,9 +24,13 @@ bp = Blueprint('debug', __name__)
 
 DBG_DIR = os.path.join(BASE_DIR, '代码调试')
 DBG_RUN = os.path.join(DBG_DIR, 'dbg_run.py')
+DBG_TOOL_RUN = os.path.join(DBG_DIR, 'dbg_tool_run.py')
 MARK_RESULT = '__DBG_RESULT__'
+MARK_TOOL = '__DBG_TOOL__'
 # 单项上限：maven 依赖校验约 5s、JVM 冷启动约 2s，留足余量
 RUN_TIMEOUT_SECONDS = 360
+# 交互工具单次上限（HTTP 请求内部最长 45s）
+TOOL_TIMEOUT_SECONDS = 90
 
 # ---------------- 代码审查记录（每次「全部验证」保存一份快照，分页查询） ----------------
 _RECORDS_PATH = os.environ.get('DEBUG_RECORDS_PATH') or os.path.join(
@@ -105,6 +109,32 @@ def api_debug_record(record_id):
             _save_records(records)
             return jsonify({'ok': True, 'msg': '已删除记录 %s' % record_id})
     return jsonify({'ok': True, 'record': record})
+
+
+# ---------------- 交互式调试工具（用户填参数 → 子进程执行 → 返回数据） ----------------
+@bp.route('/api/debug/tool', methods=['POST'])
+def api_debug_tool():
+    body = request.get_json(force=True, silent=True) or {}
+    tool = str(body.get('tool') or '').strip()
+    params = body.get('params') or {}
+    if not re.match(r'^[a-z_]+$', tool or ''):
+        return jsonify({'ok': False, 'msg': '工具名不合法'}), 400
+    try:
+        proc = subprocess.run(
+            [sys.executable, DBG_TOOL_RUN],
+            input=json.dumps({'tool': tool, 'params': params}, ensure_ascii=False),
+            capture_output=True, text=True, timeout=TOOL_TIMEOUT_SECONDS, cwd=BASE_DIR,
+            env=dict(os.environ, PYTHONIOENCODING='utf-8'))
+    except subprocess.TimeoutExpired:
+        return jsonify({'ok': False, 'msg': '工具执行超时(>%ds)' % TOOL_TIMEOUT_SECONDS})
+    result = None
+    for line in reversed((proc.stdout or '').splitlines()):
+        if line.startswith(MARK_TOOL):
+            result = json.loads(line[len(MARK_TOOL):])
+            break
+    if result is None:
+        return jsonify({'ok': False, 'msg': '工具无输出: %s' % ((proc.stderr or proc.stdout or '')[-300:])})
+    return jsonify({'ok': True, 'result': result})
 
 
 def _load_registry():

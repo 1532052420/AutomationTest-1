@@ -9,8 +9,9 @@
 <body>
 <header>
   <div class="brand"><a class="back-platform" href="http://127.0.0.1:8080/" title="回到 AppUI 自动化测试平台">🏠<span>平台</span></a> 🎯 App 元素定位器 <span id="app-version" class="ver">v2.6</span> <span class="sub">AutomationTest 框架 · 截图点选 → 一键写进元素库</span>
-    <select id="open-case-sel" class="hdr-select" title="选择用例文件查看内容"><option value="">📂 打开用例…</option></select>
-    <select id="open-ele-sel" class="hdr-select" title="选择元素定位文件查看内容"><option value="">🗂 打开元素文件…</option></select>
+    <select id="open-case-sel" class="hdr-select" title="选择用例文件打开编辑"><option value="">📂 打开用例…</option></select>
+    <select id="open-ele-sel" class="hdr-select" title="选择元素定位文件打开编辑"><option value="">🗂 打开元素文件…</option></select>
+    <select id="open-page-sel" class="hdr-select" title="选择页面操作文件打开编辑"><option value="">🧩 打开页面操作…</option></select>
   </div>
   <div class="hdr-right">
     <span id="dev-info" class="dev-info">未连接</span>
@@ -26,6 +27,7 @@
       <img id="shot" alt="设备截图" style="display:none">
       <div id="shot-overlay"></div>
       <div id="shot-empty" class="empty">← 点击"刷新"加载手机截图</div>
+      <button id="cont-add-chip" class="cont-add-chip" style="display:none" title="点击退出连续添加">🔁 连续添加中 · 点截图选下一个元素 · 点此退出</button>
     </div>
   </section>
 
@@ -59,55 +61,102 @@
   </section>
 </main>
 
-<!-- 添加到元素库 弹窗 -->
+<!-- 添加到元素库 弹窗（横向三栏：元素 → 用例 → 操作） -->
 <div id="modal-mask" class="modal-mask" style="display:none">
-  <div class="modal">
-    <div class="modal-title">添加到元素库 <span class="hint">名称已自动推荐，可修改；点每个字段旁的「?」看说明</span></div>
+  <div class="modal modal-flow">
+    <div class="modal-title">➕ 添加到元素库 <span class="hint">按「元素 → 用例 → 操作」流程走：选下方用途决定走到哪一步；点字段旁「?」看说明</span></div>
     <div class="modal-body">
-      <div class="group-title">基础信息 <span class="hint">入库必需</span></div>
-      <label>元素名称 <span class="help-icon" data-help="这个名字是「元素在代码里的引用名」，会生成 self.元素名 = CreateElement.create(...) 这一行，以后用例和页面方法都靠它找到这个元素。命名规则：字母/数字/下划线，不能以数字开头。已按截图元素自动推荐，可改成自己顺手的名字，如 login_btn。">?</span>
-        <input id="el-name" type="text" placeholder="如: search_btn">
-      </label>
-      <label>定位方式 <span class="help-icon" data-help="告诉框架「用什么方式去找这个元素」。ID = 用资源 id（最稳最快，首选）；XPATH = 用表达式（按文本/层级找，如 //*[@text=「登录」]）；ACCESSIBILITY_ID = 无障碍标签；其他少用。定位器已按元素特点给出候选，一般不用改。">?</span>
-        <select id="el-type"></select>
-      </label>
-      <label>定位值 <span class="help-icon" data-help="和上面的定位方式配套的具体值。选 ID 就填资源 id（如 com.recordlife.kuaige:id/btnPhone）；选 XPATH 就填表达式。定位器已经自动填好，不用手写；改定位方式时记得一起核对。">?</span>
-        <input id="el-value" type="text">
-      </label>
-      <label>等待方式 <span class="help-icon" data-help="操作这个元素之前，框架要等它先达到什么状态。可见 = 等它显示出来再操作（默认，最常用）；存在 = 元素可能在屏幕外/加载慢，只要存在就行；可点击 = 适合按钮，保证按下前已能响应。选错可能等超时或点击时机不对。">?</span>
-        <select id="el-wait">
-          <option value="VISIBILITY_OF">VISIBILITY_OF（可见）</option>
-          <option value="PRESENCE_OF_ELEMENT_LOCATED">PRESENCE_OF_ELEMENT_LOCATED（存在）</option>
-          <option value="ELEMENT_TO_BE_CLICKABLE">ELEMENT_TO_BE_CLICKABLE（可点击）</option>
-        </select>
-      </label>
-      <label>写入元素文件 <span class="help-icon" data-help="这个元素写进哪个元素文件。默认新建 locator_gui_elements.py；也可以写进已有文件（如 kuaigeLoginElements.py），方便和同页面的元素放一起。写在哪个文件，用例/页面里就引用哪个文件的元素类。">?</span>
-        <select id="el-file"></select>
-      </label>
-
-      <div class="group-title">用途 <span class="help-icon" data-help="决定点「保存」后做什么。选 ① = 只把元素写进元素库文件（先攒元素，稍后统一写用例）；选 ② = 写进元素库的同时，把「对元素做的一步操作」追加到目标用例文件的方法末尾，一次完成入库 + 生成用例代码。">?</span> <span class="hint">单选，决定保存行为</span></div>
-      <div class="purpose-row">
-        <label class="purpose"><input type="radio" name="el-purpose" value="only" checked> ① 仅保存到元素库</label>
-        <label class="purpose"><input type="radio" name="el-purpose" value="case"> ② 保存并添加到用例</label>
+      <div class="flow-step">
+        <span class="fs-label">保存到哪一步：</span>
+        <label class="purpose"><input type="radio" name="el-purpose" value="only" checked> <span class="help-icon" data-help="只把元素写进元素库（先攒元素，之后统一写用例）。右侧②③栏熄灭不可用。">?</span> ① 仅元素</label>
+        <label class="purpose"><input type="radio" name="el-purpose" value="case"> <span class="help-icon" data-help="写元素库 + 把这步操作代码追加到目标用例方法末尾。不会生成页面方法——目标页面里必须已存在同名方法（如 click_login_btn），否则执行时报错。适合重复使用之前生成过的操作。">?</span> ② 元素 + 用例</label>
+        <label class="purpose"><input type="radio" name="el-purpose" value="all"> <span class="help-icon" data-help="三件套一次完成（推荐）：元素入库 + 用例行追加 + 页面操作方法自动生成/更新到目标用例的页面文件。用例、元素、操作缺一不可，选这个就不会漏。">?</span> ③ 元素 + 用例 + 操作</label>
       </div>
 
-      <!-- 选②后展开：用例生成组（操作类型在保存前选定） -->
-      <div id="case-gen-group" class="case-gen-group" style="display:none">
-        <div class="group-title">用例生成 <span class="hint">选 ② 后必填</span></div>
-        <label>操作类型 <span class="help-icon" data-help="保存后要「对这个元素做什么」，决定追加到用例的代码：选「点击」→ 生成 page.click_元素名()；选「输入」→ page.input_元素名('内容')；选「断言…」→ 校验结果。不需要参数的类型（点击/长按/断言存在），参数框会自动隐藏。">?</span>
-          <select id="el-op-type"></select>
-        </label>
-        <label id="el-op-param-wrap" style="display:none">操作参数 <span class="help-icon" data-help="操作需要的额外内容：输入→要输入的文本；断言Toast→toast 文案；断言文本→期望文字；坐标点击→x,y（逗号分隔）；等待→秒数；截图→截图名。不需要参数的类型这里会自动隐藏。">?</span>
-          <input id="el-op-param" type="text" placeholder="输入内容 / 期望文本 / toast文本 / 坐标(x,y) / 秒数">
-        </label>
-        <label>目标用例文件 <span class="help-icon" data-help="把生成的代码行追加到哪个用例文件（cases/app_ui/android/demoProject/test_*.py）。下拉里是已有的用例文件；代码会追加到你选的「目标方法」体末尾。新功能请先到「📝 用例工作台」创建文件再回来追加。">?</span>
-          <select id="el-case-file"></select>
-        </label>
-        <label>目标方法 <span class="help-icon" data-help="目标用例文件里的某个测试方法（def test_xxx）。代码行会追加到这个方法体末尾（最后一行之后，不影响已有代码）。下拉只列方法，不含 setup_class/teardown_class。">?</span>
-          <select id="el-case-method"></select>
-        </label>
-        <div class="pv-title">代码预览 <span class="help-icon" data-help="点保存后将追加到目标方法末尾的这一行代码（所见即所得）。格式与「用例工作台」一致：page.方法(元素参数)。若目标用例的页面对象还没有对应方法，可到「📝 用例工作台」用相同步骤生成页面对象，或用「自定义代码」类型写 appOperator 直调。">?</span> <span class="hint">只读，将追加到目标方法末尾</span></div>
-        <pre id="el-code-preview" class="el-content"></pre>
+      <div class="flow-cols">
+        <!-- 第一栏：元素 -->
+        <section class="flow-col" id="col-element">
+          <div class="col-head">① 元素 <span class="hint">入库必需</span></div>
+          <label>元素名称 <span class="help-icon" data-help="元素在代码里的引用名，生成 self.元素名 = CreateElement.create(...)；用例、页面方法都靠它找到这个元素，三件套以它为纽带。命名：字母/数字/下划线，不能以数字开头。已按截图元素自动推荐，可改。">?</span>
+            <input id="el-name" type="text" placeholder="如: search_btn">
+          </label>
+          <label>定位方式 <span class="help-icon" data-help="用什么方式找这个元素。ID = 资源 id（最稳最快，首选）；XPATH = 表达式（按文本/层级找）；ACCESSIBILITY_ID = 无障碍标签；其他少用。定位器已按元素特点给出候选，一般不用改。">?</span>
+            <select id="el-type"></select>
+          </label>
+          <label>定位值 <span class="help-icon" data-help="和定位方式配套的具体值，已自动填好；改定位方式时记得一起核对。">?</span>
+            <input id="el-value" type="text">
+          </label>
+          <label>等待方式 <span class="help-icon" data-help="操作这个元素之前，框架要等它先达到什么状态。可见 = 显示出来再操作（默认，最常用）；存在 = 可能在屏幕外/加载慢，存在即可；可点击 = 适合按钮。选错可能等超时或点击时机不对。">?</span>
+            <select id="el-wait">
+              <option value="VISIBILITY_OF">VISIBILITY_OF（可见）</option>
+              <option value="PRESENCE_OF_ELEMENT_LOCATED">PRESENCE_OF_ELEMENT_LOCATED（存在）</option>
+              <option value="ELEMENT_TO_BE_CLICKABLE">ELEMENT_TO_BE_CLICKABLE（可点击）</option>
+            </select>
+          </label>
+          <label>等待时间(秒) <span class="help-icon" data-help="等待方式最多等多少秒（框架默认 30）。元素找到的瞬间就继续执行——所以有的操作快、有的慢；一直没找到就等满这里填的秒数才报错。加载慢的页面调大，想快点暴露定位问题调小。">?</span>
+            <input id="el-wait-sec" type="number" min="1" max="600" step="1" value="30">
+          </label>
+          <label>元素备注 <span class="help-icon" data-help="这个元素是什么（如「登录页-手机号输入框」），写在元素库生成行的行尾注释里，以后回看元素库一眼知道每个元素是干嘛的。可不填。">?</span>
+            <input id="el-comment" type="text" placeholder="如: 登录页-登录按钮（可不填）">
+          </label>
+          <label>写入元素文件 <span class="help-icon" data-help="元素写进哪个元素文件。选③时这里会自动对齐到目标用例页面引用的元素文件（页面只认一个元素文件，必须一致）；选①②时默认写进定位器自己的库文件，也可选已有文件。">?</span>
+            <select id="el-file"></select>
+          </label>
+          <div class="pv-title">元素代码 <span class="hint">实时</span></div>
+          <pre id="el-code-element" class="el-content mini"></pre>
+        </section>
+
+        <!-- 第二栏：用例 -->
+        <section class="flow-col" id="col-case">
+          <div class="col-head">② 用例 <span class="hint">这步操作追加到哪条用例</span></div>
+          <label>目标用例文件 <span class="help-icon" data-help="操作代码行追加到哪个用例文件（test_*.py）。下拉列出现有用例文件；还没有的话先到「📝 用例工作台」创建——③依赖那里生成的页面对象。">?</span>
+            <select id="el-case-file"></select>
+          </label>
+          <label>目标方法 <span class="help-icon" data-help="追加到用例文件里的哪个测试方法（def test_xxx）体末尾，不影响已有步骤。">?</span>
+            <select id="el-case-method"></select>
+          </label>
+          <label>用例备注 <span class="help-icon" data-help="这一步在用例里的注释（如「第3步：点登录」），写在追加代码行的上一行，读用例时一眼看懂每步在干嘛。可不填——留空会自动生成（如「点击 login_btn」）。">?</span>
+            <input id="el-case-comment" type="text" placeholder="留空=自动生成（可不填）">
+          </label>
+          <label>插入位置 <span class="help-icon" data-help="这步插到目标方法的哪个位置。默认「末尾」；录流程时发现漏了一步（如漏点某个按钮），选「第 N 步之后」补插到中间。步骤列表在下方实时可见。">?</span>
+            <select id="el-insert-pos"></select>
+          </label>
+          <div id="el-steps-list" class="steps-list"></div>
+          <div id="el-link-note" class="bind-note" style="display:none"></div>
+          <div class="pv-title">用例代码 <span class="hint">实时 · 按插入位置生成</span></div>
+          <pre id="el-code-case" class="el-content mini"></pre>
+        </section>
+
+        <!-- 第三栏：操作 -->
+        <section class="flow-col" id="col-op">
+          <div class="col-head">③ 操作 <span class="hint">对这个元素做什么</span></div>
+          <label>操作类型 <span class="help-icon" data-help="保存后要「对这个元素做什么」，决定生成的代码：点击 → page.click_元素名()；输入 → page.input_元素名('内容')；断言… → 校验结果。断言也是操作的一种：框架把断言逻辑封装在页面方法里（Page Object 惯例），用例只调用 page.assert_xxx()。不需要参数的类型参数框自动隐藏。">?</span>
+            <select id="el-op-type"></select>
+          </label>
+          <label id="el-op-param-wrap">操作参数 <span class="help-icon" data-help="操作需要的额外内容：输入→文本；断言Toast→toast 文案；断言文本→期望文字；坐标点击→x,y；等待→秒数；截图→截图名。不需要时自动隐藏。">?</span>
+            <input id="el-op-param" type="text" placeholder="输入内容 / 期望文本 / toast文本 / 坐标(x,y) / 秒数">
+          </label>
+          <label>步骤描述 <span class="help-icon" data-help="这一步做了什么（如「点击消息进入消息详情」），生成到用例注释和页面方法说明里，测试报告里也按它显示。已按元素文本自动生成，报告需要更友好的文字时再改；留空也会自动补。">?</span>
+            <input id="el-op-comment" type="text" placeholder="留空=自动生成（可不填）">
+          </label>
+          <label>写入页面文件 <span class="help-icon" data-help="页面操作方法（如 click_login_btn）写进哪个 xxxPage.py——这个文件由目标用例决定（用例的 self.page 用的就是它），所以只读不可改：换页面文件 = 换目标用例。元素文件+页面文件就是操作牵涉的两个文件。">?</span>
+            <input id="el-page-file" type="text" readonly placeholder="选择目标用例后自动带出">
+          </label>
+          <div id="op-note" class="op-note"></div>
+          <div class="pv-title">页面方法代码 <span class="hint">实时 · 选③时生成</span></div>
+          <pre id="el-code-preview" class="el-content mini"></pre>
+        </section>
+      </div>
+
+      <!-- 已有元素复用面板：命中重复定位时显示，默认直接复用（防元素库膨胀） -->
+      <div id="el-dup-panel" class="dup-panel" style="display:none">
+        <div class="dup-title">⚠ 元素库中已存在相同定位</div>
+        <div id="el-dup-info" class="dup-info"></div>
+        <div class="dup-btns">
+          <button id="btn-dup-reuse" class="btn small primary">✔ 直接复用（推荐）</button>
+          <button id="btn-dup-update" class="btn small">✎ 更新元素定义</button>
+          <button id="btn-dup-cancel" class="btn small">✕ 取消</button>
+        </div>
       </div>
 
       <div id="el-result" class="el-result"></div>
@@ -115,6 +164,7 @@
     </div>
     <div class="modal-foot">
       <button id="btn-modal-cancel" class="btn">取消</button>
+      <button id="btn-modal-save-continue" class="btn" title="保存后不结束：回到定位器点下一个元素，自动弹出本窗口连续录入">💾 保存并继续</button>
       <button id="btn-modal-save" class="btn primary">💾 保存</button>
     </div>
   </div>
@@ -123,47 +173,55 @@
 <!-- 用例工作台弹窗 -->
 <div id="case-mask" class="modal-mask" style="display:none">
   <div class="modal modal-wide">
-    <div class="modal-title">📝 用例工作台 <span class="hint">元素库管"怎么找到"，用例管"找到后做什么"——用例只引用元素名；点字段旁的「?」看说明</span></div>
+    <div class="modal-title">📝 用例工作台 <span class="hint">一条用例 = 一串步骤，每步 = <b>元素 + 操作</b>；用例、元素、操作三件缺一不可，点字段旁「?」看说明</span></div>
     <div class="modal-body">
+
+      <div class="group-title">① 用例 <span class="hint">这条测试放哪个文件、测什么</span></div>
       <div class="case-grid">
-        <label>用例文件名 <span class="help-icon" data-help="生成的用例文件叫什么，存在 cases/app_ui/android/demoProject/ 下（如 test_login.py）。一个功能一个文件（登录流程/写歌流程/退出登录流程各一个），文件里可以有多个测试方法，最后一起执行。必须以 .py 结尾。">?</span>
+        <label>用例文件名 <span class="help-icon" data-help="这条用例存到哪个 test_*.py 文件（cases/app_ui/android/demoProject/ 下）。一个功能一个文件：登录流程一个文件、写歌流程一个文件；一个文件里可以放多条用例。改动文件名会自动带出测试方法名。">?</span>
           <input id="case-file" type="text" value="test_login.py">
         </label>
-        <label>用例类名 <span class="help-icon" data-help="pytest 的测试类（class TestXxx），作用只是「把同一功能的多个用例方法组织在一起」，本身不决定执行逻辑。类名以 Test 开头 pytest 才会收集执行。填错不影响运行、但用例可能不被收集；留默认即可。">?</span>
-          <input id="case-class" type="text" value="TestLogin">
-        </label>
-        <label>测试方法名 <span class="help-icon" data-help="一条用例 = 一个以 test_ 开头的方法（def test_xxx），方法里的代码就是一步步执行页面操作。一个类可放多个 test_ 方法 = 同一功能的多个流程。同名方法重复生成会覆盖更新（改步骤后点的保存会更新这条）。">?</span>
+        <label>测试方法名 <span class="help-icon" data-help="一条用例 = 文件里一个 test_ 开头的方法，方法体里的代码就是一步步执行页面操作。已按文件名自动带出，一般不用改。用相同方法名再次点「生成用例」= 整体覆盖更新这条用例（改完步骤重新生成即可）。">?</span>
           <input id="case-method" type="text" value="test_login">
         </label>
-        <label>用例描述 <span class="help-icon" data-help="写到用例文件头部的注释，说明这条用例测什么（如「快歌App登录流程」），方便自己/同事看懂、报告里好定位。不填也不影响运行。">?</span>
+        <label>用例描述 <span class="help-icon" data-help="写到用例文件头部的注释，一句话说明这条用例测什么（如「快歌App登录流程」），方便自己和同事看懂、报告里好定位。可不填，不影响运行。">?</span>
           <input id="case-desc" type="text" placeholder="如: 快歌App登录流程">
         </label>
-        <label>包名 <span class="help-icon" data-help="被测 App 的包名（Android applicationId）。用例的 setup_class 里用它拉起 App。设备配置 conf 的 appPackages 字段能看到；kuaige 的默认已经填好，换 App 时改成自己的。">?</span>
-          <input id="case-pkg" type="text" value="com.recordlife.kuaige">
-        </label>
-        <label>Activity <span class="help-icon" data-help="App 里的某个页面（Android Activity 完整路径），和包名一起决定启动后进哪个页面。设备配置 conf 的 appActivitys 字段能看到；kuaige 的默认已填好，换 App 时改成自己的。">?</span>
-          <input id="case-activity" type="text" value="com.recordlife.kuaige.feature.main.MainActivity">
-        </label>
-        <label>页面文件名 <span class="help-icon" data-help="页面对象文件 xxxPage.py。页面对象 = 把「对元素的操作」封装成有业务名的方法（如 click_login_btn），用例只调用页面方法、不直接碰元素（框架最佳实践）。选已有文件 = 往里面追加方法；选「新建页面」= 生成新文件，下方类名自动生成可改。">?</span>
-          <select id="case-page-file"></select>
-        </label>
-        <label>页面类名 <span class="help-icon" data-help="页面对象类名。留空会自动按文件名生成（如 loginPage.py → LoginPage）。追加到已有页面时保持自动即可；新建页面才需要确认。">?</span>
-          <input id="case-page-class" type="text" placeholder="留空=按文件名自动">
-        </label>
-        <label>引用元素文件 <span class="help-icon" data-help="页面对象通过这个元素文件的元素类拿到元素（self._elements.xxx）。必须选「你的元素实际所在」的文件（一般就是添加元素时选的那个），选错会 import 不到元素、生成代码跑不起来。">?</span>
-          <select id="case-ele-file"></select>
-        </label>
-        <label class="chk"><input id="case-gen-page" type="checkbox" checked> 同时生成/更新页面对象文件 <span class="help-icon" data-help="勾选 = 连页面对象文件一起生成/追加（推荐，新手保持勾选）；不勾选 = 只生成用例文件，此时用例引用的页面类必须已存在，否则跑不起来。">?</span></label>
-        <label class="chk"><input id="case-gen-teardown" type="checkbox" checked> 生成 teardown_class（reset_app） <span class="help-icon" data-help="勾选 = 这个类里的用例全跑完后，自动执行 reset_app()（清空 App 数据、恢复初始状态），保证下一条用例从干净状态开始、用例之间互不干扰（测试惯例）。不勾选 = 跑完不重置，App 保留操作后的状态，可能影响后面的用例。建议保持勾选。">?</span></label>
       </div>
-      <div class="steps-head">用例步骤 <span class="help-icon" data-help="用例步骤 = 一条用例按顺序执行的一串操作（点这里 → 输入那里 → 断言结果）。每步 = 对某个元素做什么操作 + 参数（如：点击 + 登录按钮；输入 + 手机号框 + "10000000000"）。从上到下就是执行顺序，可用 ↑↓ 调序。三种添加方式：① 左侧截图/元素树选中元素 →「添加到元素库」→「保存并添加到用例」自动追加；② 点「从元素库添加步骤」手动拼；③ 「自定义代码步骤」写任意一行代码兜底（高级）。">?</span> <span class="hint">两种入口（元素库选择 / 定位器快捷添加）生成同一结构</span></div>
+
+      <div class="steps-head">② 用例步骤（每步 = 元素 + 操作） <span class="help-icon" data-help="一行 = 对哪个元素做什么操作，从上到下就是执行顺序。第二列选操作（点击/输入/断言…），第三列选元素名——必须和元素库里的一致，否则执行时找不到元素；需要参数的操作（输入/断言文本）在第四列填参数。元素和操作缺一不可：没有元素，操作没有目标；没有操作，元素不会被使用。工具类步骤（坐标点击/等待/截图/Toast断言）不需要元素。">?</span> <span class="hint">从上到下依次执行</span></div>
       <div id="case-steps"></div>
       <div class="steps-tools">
         <button id="btn-step-add" class="btn small">＋ 从元素库添加步骤</button>
         <button id="btn-step-custom" class="btn small">＋ 自定义代码步骤</button>
       </div>
+      <div id="case-bind-note" class="bind-note" style="display:none"></div>
+
+      <div class="group-title">③ App 启动与收尾 <span class="hint">已按快歌预填，换 App 才需要改</span></div>
+      <div class="case-grid">
+        <label>App 包名 <span class="help-icon" data-help="被测 App 的 Android 包名，用例开头靠它拉起 App。快歌已预填；换 App 时改这里和下面的 Activity。">?</span>
+          <input id="case-pkg" type="text" value="com.recordlife.kuaige">
+        </label>
+        <label>启动页面 Activity <span class="help-icon" data-help="App 启动后进入的页面（Activity 完整路径），和包名一起决定从哪个页面开始测。快歌已预填。">?</span>
+          <input id="case-activity" type="text" value="com.recordlife.kuaige.feature.main.MainActivity">
+        </label>
+        <label class="chk wide"><input id="case-gen-teardown" type="checkbox" checked> 跑完自动关闭并清空 App <span class="help-icon" data-help="勾选 = 这条用例跑完立即关闭 App 并清空数据（恢复初始状态，保证下一条用例从干净状态开始，测试惯例）。想跑完把 App 留在手机上观察结果，就去掉勾选——但下一条用例可能受残留状态影响。">?</span></label>
+      </div>
+
+      <details class="adv-group">
+        <summary>高级：生成去向（自动处理，一般不用改）</summary>
+        <div class="case-grid">
+          <label>操作保存到哪个页面文件 <span class="help-icon" data-help="每步「操作」会生成一个页面方法（如 click_login_btn），写进这个 xxxPage.py 文件——这就是「操作」的存放地。默认自动新建与用例同名的页面文件；也可以选已有文件，把操作追加进去。">?</span>
+            <select id="case-page-file"></select>
+          </label>
+          <label>元素在哪个元素文件 <span class="help-icon" data-help="页面文件通过这个元素文件引用元素（self._elements.xxx）。必须选「元素实际所在」的文件——步骤里选的元素在哪个文件，这里就选哪个；选错执行时会报找不到元素。">?</span>
+            <select id="case-ele-file"></select>
+          </label>
+        </div>
+      </details>
+
       <div id="case-result" class="el-result"></div>
-      <div class="pv-title">生成预览</div>
+      <div class="pv-title">生成预览 <span class="help-icon" data-help="随上方步骤实时更新：每一行就是将写进用例方法的代码（page.操作_元素名()）。元素名一改这里立刻变——这就是「元素名 → 页面方法名 → 用例代码」的绑定关系；出现 ⚠ 说明该元素名在元素库里不存在，执行会失败，保存时也会被拦截。">?</span> <span class="hint">随步骤实时更新</span></div>
       <pre id="case-preview-content" class="el-content"></pre>
     </div>
     <div class="modal-foot">
@@ -173,14 +231,15 @@
   </div>
 </div>
 
-<!-- 顶部快速打开·文件查看 弹窗 -->
+<!-- 顶部快速打开·文件编辑 弹窗 -->
 <div id="view-mask" class="modal-mask" style="display:none">
   <div class="modal modal-wide">
-    <div class="modal-title"><span id="view-title">文件</span>
+    <div class="modal-title"><span id="view-title">文件</span> <span id="view-status" class="hint"></span>
+      <button id="btn-view-save" class="btn small primary" style="float:right; margin-right:6px">💾 保存修改</button>
       <button id="btn-view-close" class="btn small" style="float:right">关闭</button>
     </div>
     <div class="modal-body">
-      <pre id="view-content" class="view-content"></pre>
+      <textarea id="view-content" class="view-content" spellcheck="false" wrap="off"></textarea>
     </div>
   </div>
 </div>
@@ -188,6 +247,6 @@
 <!-- 字段帮助气泡（点击问号显示） -->
 <div id="help-tip" class="help-tip" style="display:none"></div>
 
-<script src="/static/index.js?v=13"></script>
+<script src="/static/index.js?v=19"></script>
 </body>
 </html>

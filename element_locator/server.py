@@ -5,6 +5,7 @@ App 元素定位器 · Flask 服务入口（element_locator）
 默认地址：http://127.0.0.1:8001
 技术方案与配置方法见同目录 技术实现方案.md
 """
+import ast
 import base64
 import os
 import re
@@ -22,7 +23,7 @@ from tutorials import TUTORIALS, search_tutorials
 app = Flask(__name__, static_folder='static', static_url_path='/static')
 
 # 元素定位器版本号：每次功能/修复后递增，左上角会显示，用来确认本地是否已更新
-APP_VERSION = 'v2.6'
+APP_VERSION = 'v2.13'
 
 # 开发工具要能"改完即刷"，静态文件禁用浏览器强缓存（Flask 默认 max-age=12h）
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
@@ -121,14 +122,26 @@ def api_add_element():
     data = request.get_json(silent=True) or {}
     # check_dup：默认 True 先做重复检测（库中已有相同定位 → 返回 duplicate 不落盘，前端决定用已有/新建）
     check_dup = data.get('check_dup', True)
+    # wait_seconds：显式等待超时秒数；空/非法 = 沿用框架默认 30
+    try:
+        wait_seconds = int(data.get('wait_seconds'))
+        if not 1 <= wait_seconds <= 600:
+            wait_seconds = None
+    except (TypeError, ValueError):
+        wait_seconds = None
     r = element_library.add_element(
         data.get('filename') or element_library.DEFAULT_FILE,
         data.get('name', '').strip(),
         data.get('locator_type', '').strip(),
         data.get('value', '').strip(),
         data.get('wait_type', 'VISIBILITY_OF').strip() or 'VISIBILITY_OF',
+        wait_seconds=wait_seconds,
+        comment=(data.get('comment') or '').strip(),
         check_dup=bool(check_dup),
     )
+    # 命中重复元素时附带「已被哪些用例使用」，前端复用面板展示（默认直接复用，防元素库膨胀）
+    if r.get('duplicate') and not r.get('ok'):
+        r['duplicate']['used_in'] = case_generator.element_usage_in_cases(r['duplicate']['name'])
     return jsonify({'ok': r['ok'], 'msg': r.get('msg', ''), 'action': r.get('action', ''),
                     'duplicate': r.get('duplicate'),
                     'filename': data.get('filename') or element_library.DEFAULT_FILE,
@@ -144,22 +157,32 @@ def api_cases():
 
 @app.route('/api/add_code', methods=['POST'])
 def api_add_code():
-    """「保存并添加到用例」：把一步操作代码追加到目标用例文件的指定方法体末尾"""
+    """「保存并添加到用例」：把一步操作代码追加到目标用例文件的指定方法体末尾。
+    gen_page_method=True（功能③）时同步生成/更新该操作的页面方法（三件套联动）。"""
     data = request.get_json(silent=True) or {}
     step = data.get('step') or {}
     if not isinstance(step, dict) or not step.get('type'):
         return jsonify({'ok': False, 'msg': '缺少操作步骤'})
+    try:
+        insert_after = int(data.get('insert_after_step') or 0)
+    except (TypeError, ValueError):
+        insert_after = 0
     r = case_generator.append_code_to_method(
         data.get('case_file', '').strip(),
         data.get('method_name', '').strip(),
         step,
+        gen_page_method=bool(data.get('gen_page_method')),
+        insert_after_step=insert_after,
     )
     return jsonify({'ok': r['ok'], 'msg': r.get('msg', ''),
                     'action': r.get('action', ''),
                     'line': r.get('line', ''),
                     'case_file': data.get('case_file', '').strip(),
                     'method_name': data.get('method_name', '').strip(),
-                    'content': r.get('content', '')})
+                    'content': r.get('content', ''),
+                    'page_file': r.get('page_file', ''),
+                    'page_method': r.get('page_method', ''),
+                    'page_content': r.get('page_content', '')})
 
 
 @app.route('/api/pages')
@@ -242,25 +265,36 @@ def api_tutorials():
     return jsonify({'ok': True, 'tutorials': search_tutorials(q)})
 
 
+# 顶部快速打开支持的三类文件：kind -> (目录, 标题后缀)
+_OPEN_KINDS = {
+    'case': (lambda: case_generator.CASES_DIR, '用例'),
+    'element': (lambda: element_library.ELEMENTS_DIR, '元素库'),
+    'page': (lambda: case_generator.PAGES_DIR, '页面操作'),
+}
+_NAME_PAT = re.compile(r'^[A-Za-z0-9_\-]+\.py$')
+
+
+def _resolve_open_file(kind, filename):
+    """按 kind 校验文件名并拼接目录（白名单防任意路径读写），返回 (full_path, title) 或 (None, 错误)"""
+    entry = _OPEN_KINDS.get(kind)
+    if not entry:
+        return None, '文件类型不合法（case / element / page）'
+    if not _NAME_PAT.match(filename or ''):
+        return None, '文件名不合法'
+    full = os.path.join(entry[0](), filename)
+    return full, '%s（%s）' % (filename, entry[1])
+
+
 @app.route('/api/file_content')
 def api_file_content():
-    """顶部快速打开·查看文件内容（只读）：?case=<用例文件名> 或 ?element=<元素文件名>。
-    目录由服务端拼接（用例→CASES_DIR，元素→ELEMENTS_DIR），文件名做白名单校验，防任意路径读取。"""
-    case_file = (request.args.get('case') or '').strip()
-    ele_file = (request.args.get('element') or '').strip()
-    if bool(case_file) == bool(ele_file):
-        return jsonify({'ok': False, 'msg': '请用 case 或 element 参数指定一个文件'})
-    name_pat = re.compile(r'^[A-Za-z0-9_\-]+\.py$')
-    if case_file:
-        if not name_pat.match(case_file):
-            return jsonify({'ok': False, 'msg': '用例文件名不合法'})
-        full = os.path.join(case_generator.CASES_DIR, case_file)
-        title = '%s（用例）' % case_file
-    else:
-        if not name_pat.match(ele_file):
-            return jsonify({'ok': False, 'msg': '元素文件名不合法'})
-        full = os.path.join(element_library.ELEMENTS_DIR, ele_file)
-        title = '%s（元素库）' % ele_file
+    """顶部快速打开·查看文件内容：?case= / ?element= / ?page= + 文件名。
+    目录由服务端拼接，文件名做白名单校验，防任意路径读取。"""
+    kind = next((k for k in ('case', 'element', 'page') if (request.args.get(k) or '').strip()), None)
+    if not kind:
+        return jsonify({'ok': False, 'msg': '请用 case / element / page 参数指定一个文件'})
+    full, msg = _resolve_open_file(kind, (request.args.get(kind) or '').strip())
+    if not full:
+        return jsonify({'ok': False, 'msg': msg})
     if not os.path.isfile(full):
         return jsonify({'ok': False, 'msg': '文件不存在: %s' % os.path.basename(full)})
     try:
@@ -268,7 +302,37 @@ def api_file_content():
             content = f.read()
     except Exception as e:
         return jsonify({'ok': False, 'msg': '读取失败: %s' % e})
-    return jsonify({'ok': True, 'title': title, 'content': content})
+    return jsonify({'ok': True, 'kind': kind, 'filename': os.path.basename(full),
+                    'title': msg, 'content': content})
+
+
+@app.route('/api/save_file', methods=['POST'])
+def api_save_file():
+    """顶部快速打开·保存修改：{kind: case|element|page, filename, content}。
+    只允许覆盖已存在的白名单文件（先打开才能改）；保存前做 Python 语法校验（ast），
+    语法错误拒绝落盘并返回行号，避免把打错的文件写坏跑不起来。"""
+    data = request.get_json(silent=True) or {}
+    kind = (data.get('kind') or '').strip()
+    filename = (data.get('filename') or '').strip()
+    content = data.get('content')
+    if content is None or not isinstance(content, str):
+        return jsonify({'ok': False, 'msg': '缺少文件内容'})
+    full, msg = _resolve_open_file(kind, filename)
+    if not full:
+        return jsonify({'ok': False, 'msg': msg})
+    if not os.path.isfile(full):
+        return jsonify({'ok': False, 'msg': '文件不存在: %s（只支持修改已打开的文件）' % filename})
+    try:
+        ast.parse(content)
+    except SyntaxError as e:
+        return jsonify({'ok': False,
+                        'msg': 'Python 语法错误（第 %s 行: %s），已取消保存' % (e.lineno, e.msg)})
+    try:
+        with open(full, 'w', encoding='utf-8') as f:
+            f.write(content)
+    except Exception as e:
+        return jsonify({'ok': False, 'msg': '写入失败: %s' % e})
+    return jsonify({'ok': True, 'msg': '%s 已保存' % msg, 'content': content})
 
 
 if __name__ == '__main__':

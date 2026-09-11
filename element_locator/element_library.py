@@ -37,9 +37,22 @@ def _escape(value):
     return str(value).replace('\\', '\\\\').replace("'", "\\'")
 
 
-def element_line(name, locator_type, value, wait_type='VISIBILITY_OF'):
-    return '%sself.%s = CreateElement.create(Locator_Type.%s, \'%s\', wait_type=Wait_By.%s)' % (
+def element_line(name, locator_type, value, wait_type='VISIBILITY_OF', wait_seconds=None, comment=None):
+    """wait_seconds：显式等待超时秒数（框架 CreateElement.create 默认 30）；
+    comment：元素备注，写在生成行行尾注释（# ...），方便回看元素是什么。
+    传正整数时显式写进生成行，所见即所得；不传/非法则沿用框架默认。"""
+    line = '%sself.%s = CreateElement.create(Locator_Type.%s, \'%s\', wait_type=Wait_By.%s' % (
         INDENT, name, locator_type, _escape(value), wait_type)
+    try:
+        sec = int(wait_seconds)
+        if sec > 0:
+            line += ', wait_seconds=%d' % sec
+    except (TypeError, ValueError):
+        pass
+    line += ')'
+    if comment and str(comment).strip():
+        line += '  # %s' % str(comment).strip().replace('\n', ' ')
+    return line
 
 
 def list_element_files():
@@ -110,9 +123,12 @@ def _write(path, content):
         f.write(content)
 
 
-def add_element(filename, name, locator_type, value, wait_type='VISIBILITY_OF', check_dup=True):
+def add_element(filename, name, locator_type, value, wait_type='VISIBILITY_OF', wait_seconds=None,
+                comment=None, check_dup=True):
     """
     向元素库文件添加/覆盖元素。
+    wait_seconds：显式等待超时秒数（None/非法 = 沿用框架默认 30）。
+    comment：元素备注（生成行行尾 # 注释，可空）。
     check_dup=True 时先做重复检测：库中已有相同定位（且非同名覆盖）→ 不落盘，
     返回 {'ok': False, 'duplicate': {...}}，由前端决定「使用已有元素」还是「强制新建」。
     返回 {'ok': bool, 'content': 文件最新内容, 'action': 'added'|'updated'|'created', 'msg': 说明}
@@ -131,7 +147,7 @@ def add_element(filename, name, locator_type, value, wait_type='VISIBILITY_OF', 
                            % (dup['name'], dup['filename'])}
 
     path = os.path.join(ELEMENTS_DIR, filename)
-    new_line = element_line(name, locator_type, value, wait_type)
+    new_line = element_line(name, locator_type, value, wait_type, wait_seconds, comment)
 
     if not os.path.exists(path):
         # 新建文件

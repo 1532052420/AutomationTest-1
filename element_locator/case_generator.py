@@ -126,10 +126,11 @@ def _method_block(name, doc, args, body):
 
 
 def page_method_code(step):
-    """步骤 → 页面方法代码块；sleep/custom 返回 None（不需要页面方法）"""
+    """步骤 → 页面方法代码块；sleep/custom 返回 None（不需要页面方法）。
+    step.comment（操作备注）优先作为方法 docstring，缺省用步骤描述。"""
     t = step.get('type', '')
     el = step.get('element') or ''
-    desc = step_desc(step)
+    desc = (step.get('comment') or '').strip() or step_desc(step)
     if t == 'click':
         return _method_block('click_%s' % el, desc, [],
                              'self.appOperator.click(self._elements.%s)' % el)
@@ -344,12 +345,13 @@ def gen_case(case_file, method_name, desc, pkg, activity, steps,
     生成/追加用例文件 test_xxx.py。
     返回 {'ok': bool, 'action': 'created'|'updated'|'added', 'content', 'msg'}
     """
-    if not re.match(r'^[A-Za-z_][A-Za-z0-9_]*\.py$', case_file):
-        return {'ok': False, 'msg': '用例文件名不合法（只允许字母/数字/下划线 + .py）'}
+    if not re.match(r'^test_[A-Za-z0-9_]+\.py$', case_file):
+        return {'ok': False, 'msg': '用例文件名必须以 test_ 开头（如 test_login.py），否则 pytest 不会收集执行这条用例'}
     if not re.match(r'^[A-Za-z_][A-Za-z0-9_]*$', method_name):
         return {'ok': False, 'msg': '用例方法名不合法'}
     if not pkg or not activity:
         return {'ok': False, 'msg': '包名和 Activity 不能为空'}
+    # 类名由文件名自动派生（test_login.py → TestLogin），保证以 Test 开头可被 pytest 收集
     case_class = case_class or element_library.to_class_name(case_file)
     page_class = page_class or element_library.to_class_name(page_file)
     path = os.path.join(CASES_DIR, case_file)
@@ -397,29 +399,113 @@ def gen_case(case_file, method_name, desc, pkg, activity, steps,
 # ---------------------------------------------------------------------------
 # 用例文件快速追加（「添加元素」弹窗 → 保存并添加到用例）
 # ---------------------------------------------------------------------------
+def _class_blocks(content):
+    """按 class 切块：[(类名, 类体文本)]，供"方法 → 类 → 页面对象"归属解析"""
+    blocks = []
+    for m in re.finditer(r'^class\s+(\w+)[^\n]*\n', content, re.MULTILINE):
+        start = m.start()
+        nxt = re.search(r'^class\s', content[m.end():], re.MULTILINE)
+        end = m.end() + nxt.start() if nxt else len(content)
+        blocks.append((m.group(1), content[start:end]))
+    return blocks
+
+
+def _page_class_of(cls_block):
+    """类体里 self.page = XxxPage( → 页面类名"""
+    m = re.search(r'self\.page\s*=\s*(\w+)\(', cls_block)
+    return m.group(1) if m else ''
+
+
+def resolve_page(page_class):
+    """页面类名 → (页面文件名, 页面引用的元素文件名)；找不到返回 ('', '')"""
+    if not page_class:
+        return '', ''
+    for f in list_page_files():
+        content = _read(os.path.join(PAGES_DIR, f))
+        if not re.search(r'^class\s+%s\b' % re.escape(page_class), content, re.MULTILINE):
+            continue
+        em = re.search(r'from\s+page_objects\.app_ui\.android\.demoProject\.elements\.(\w+)\s+import', content)
+        return f, ((em.group(1) + '.py') if em else '')
+    return '', ''
+
+
+def _method_body(content, method_name):
+    """方法体文本（含缩进），找不到返回 None"""
+    m = re.search(r'^%sdef %s\(self\):' % (IND, re.escape(method_name)), content, re.MULTILINE)
+    if not m:
+        return None
+    start = content.find('\n', m.end()) + 1
+    tail = content[start:]
+    nxt = re.search(r'\n%s(?:def |@|class )' % IND, tail)
+    return content[start:start + (nxt.start() + 1 if nxt else len(tail))]
+
+
+def method_steps(content, method_name):
+    """提取方法体里的步骤描述（# 注释行，自动去掉「N.」编号），按出现顺序返回。"""
+    body = _method_body(content, method_name)
+    if not body:
+        return []
+    steps = []
+    for cm in re.finditer(r'^%s# (.+)$' % (IND * 2), body, re.MULTILINE):
+        desc = re.sub(r'^\d+[\.、]\s*', '', cm.group(1).strip())
+        if desc:
+            steps.append(desc)
+    return steps
+
+
+def element_usage_in_cases(element_name):
+    """元素被哪些用例文件使用：统计 page.<操作>_元素名( 调用（click/input/long_press/assert 等）。
+    一个元素可被多个用例、每种操作多次引用——这是三件套的既定数据关系。"""
+    pat = re.compile(r'page\.(?:click|input|long_press|assert)_%s(?:_text)?\(' % re.escape(element_name))
+    used = []
+    for f in list_case_files():
+        p = os.path.join(CASES_DIR, f)
+        if not os.path.exists(p):
+            continue
+        n = len(pat.findall(_read(p)))
+        if n:
+            used.append({'file': f, 'count': n})
+    return used
+
+
 def case_files_info():
-    """返回 [{file, class, methods:[...]}]，供「目标用例」下拉（文件 + 方法两级联动）"""
+    """返回用例文件的"三件套归属"信息，供「添加到元素库」联动：
+    [{file, class, methods, method_steps:{方法: [步骤描述...]}, page_class, page_file, elements_file}]
+    page_file/elements_file = 该类 self.page 使用的页面对象及其引用的元素文件"""
     infos = []
     for f in list_case_files():
         p = os.path.join(CASES_DIR, f)
         if not os.path.exists(p):
             continue
         content = _read(p)
-        cls = re.search(r'^class (\w+)', content, re.MULTILINE)
-        methods = re.findall(r'^%sdef (\w+)\(' % IND, content, re.MULTILINE)
-        infos.append({'file': f, 'class': cls.group(1) if cls else '', 'methods': methods})
+        for cls_name, block in _class_blocks(content):
+            methods = re.findall(r'^%sdef (\w+)\(' % IND, block, re.MULTILINE)
+            msteps = {}
+            for mname in methods:
+                if mname not in ('setup_class', 'teardown_class'):
+                    msteps[mname] = method_steps(block, mname)
+            page_class = _page_class_of(block)
+            page_file, elements_file = resolve_page(page_class)
+            infos.append({'file': f, 'class': cls_name, 'methods': methods,
+                          'method_steps': msteps,
+                          'page_class': page_class, 'page_file': page_file,
+                          'elements_file': elements_file})
     return infos
 
 
-def append_code_to_method(case_file, method_name, step):
-    """把 step 生成的一行调用代码追加到用例文件指定方法的末尾（不破坏文件结构）。
+def append_code_to_method(case_file, method_name, step, gen_page_method=False, insert_after_step=None):
+    """把 step 生成的一行调用代码插入用例文件指定方法体（不破坏文件结构）。
 
-    step：统一步骤结构（type/element/param/desc），代码行 = case_step_line(step)。
-    插入规则：目标方法体最后一个缩进行之后、下一个同级 def/@/class 之前。
-    返回 {'ok': bool, 'action': 'appended', 'line': 代码行, 'content': 文件最新内容, 'msg'}
+    step：统一步骤结构（type/element/param/desc + case_comment 步骤描述）。
+    insert_after_step：0/None = 追加到方法末尾；N = 插到第 N 个步骤之后（漏步骤时补插中间）。
+    步骤描述 case_comment 缺省时自动生成（如「点击 login_btn」），作为该步在用例里的注释。
+    gen_page_method=True（功能③）时同步把该操作对应的页面方法生成/更新到
+    目标用例 self.page 所引用的页面文件（三件套联动），并校验元素文件归属。
+    返回 {'ok': bool, 'action': 'appended', 'line':..., 'content':..., 'msg',
+          'page_file':..., 'page_method':..., 'page_content':...}
     """
     if not re.match(r'^[A-Za-z_][A-Za-z0-9_]*\.py$', case_file):
-        return {'ok': False, 'msg': '用例文件名不合法（只允许字母/数字/下划线 + .py）'}
+        return {'ok': False, 'msg': '用例文件名不合法'}
     if not re.match(r'^[A-Za-z_][A-Za-z0-9_]*$', method_name):
         return {'ok': False, 'msg': '用例方法名不合法'}
     if not isinstance(step, dict) or step.get('type') not in STEP_TYPES:
@@ -441,16 +527,87 @@ def append_code_to_method(case_file, method_name, step):
     if body_start <= 0:
         return {'ok': False, 'msg': '无法定位方法体'}
 
+    # 步骤描述（step.case_comment）写在代码行上方；缺省自动生成，让每步都有注释可读
+    case_comment = ((step.get('case_comment') or '').strip() or step_desc(step)).replace('\n', ' ')
+    comment_line = IND * 2 + '# ' + case_comment + '\n'
+
     tail = content[body_start:]
     nxt = re.search(r'\n%s(?:def |@|class )' % IND, tail)
     body_end = body_start + (nxt.start() + 1 if nxt else len(tail))
     body = content[body_start:body_end]
 
-    new_body = body.rstrip('\n') + '\n' + IND * 2 + line + '\n\n'
+    # 插入位置：insert_after_step=N → 第 N 个步骤（方法体内的 # 注释锚点）之后；否则末尾追加
+    try:
+        after_n = int(insert_after_step or 0)
+    except (TypeError, ValueError):
+        after_n = 0
+    if after_n > 0:
+        anchors = list(re.finditer(r'^%s# ' % (IND * 2), body, re.MULTILINE))
+        if after_n > len(anchors):
+            return {'ok': False, 'msg': '目标方法只有 %d 个步骤，没有第 %d 步' % (len(anchors), after_n)}
+        chunk_end = anchors[after_n].start() if after_n < len(anchors) else len(body)
+        new_body = (body[:chunk_end].rstrip('\n') + '\n\n' + comment_line + IND * 2 + line + '\n\n'
+                    + body[chunk_end:].lstrip('\n'))
+    else:
+        new_body = body.rstrip('\n') + '\n' + comment_line + IND * 2 + line + '\n\n'
     new_content = content[:body_start] + new_body + content[body_end:]
     _write(path, new_content)
-    return {'ok': True, 'action': 'appended', 'line': line, 'content': new_content,
-            'msg': '代码已追加到 %s::%s：%s' % (case_file, method_name, line)}
+    result = {'ok': True, 'action': 'appended', 'line': line, 'content': new_content,
+              'page_file': '', 'page_method': '', 'page_content': '',
+              'msg': '代码已追加到 %s::%s：%s' % (case_file, method_name, line)}
+    if not gen_page_method:
+        return result
+
+    # ---- 功能③：三件套联动，同步生成/更新页面操作方法 ----
+    # 1) 目标方法所在类 → 该类使用的页面对象类 → 页面文件 + 其引用的元素文件
+    page_class = ''
+    for cls_name, block in _class_blocks(new_content):
+        if re.search(r'^%sdef %s\(' % (IND, re.escape(method_name)), block, re.MULTILINE):
+            page_class = _page_class_of(block)
+            break
+    page_file, elements_file = resolve_page(page_class)
+    if not page_file:
+        return {'ok': False,
+                'msg': ('已追加用例行，但目标用例没有页面对象（找不到 self.page = XxxPage(...)），'
+                        '无法生成操作方法——请先到「📝 用例工作台」生成该用例的页面对象')}
+
+    method_code = page_method_code(step)
+    if not method_code:
+        # sleep/custom 等步骤没有对应页面方法，用例行本身就是全部内容
+        result['msg'] += '；该操作类型无需页面方法'
+        result['page_file'] = page_file
+        return result
+
+    # 2) 元素必须在页面引用的元素文件里（一个页面只 import 一个元素文件）
+    el_name = step.get('element') or ''
+    if el_name and elements_file:
+        if el_name not in element_library.list_element_names(elements_file):
+            where = [ff for ff in element_library.list_element_files()
+                     if el_name in element_library.list_element_names(ff)]
+            return {'ok': False,
+                    'msg': ('已追加用例行，但元素 %s 不在页面 %s 引用的元素文件 %s 里（元素实际在: %s）。'
+                            '请把元素保存到 %s（保存元素时「写入元素文件」选它），或在元素库统一后重试'
+                            % (el_name, page_file, elements_file,
+                               '、'.join(where) or '任何文件中都没有', elements_file))}
+
+    # 3) upsert 页面方法：同名元素操作方法覆盖更新；工具方法已存在则不重复生成
+    ppath = os.path.join(PAGES_DIR, page_file)
+    pcontent = _read(ppath)
+    mname = re.match(r'%sdef (\w+)' % IND, method_code).group(1)
+    exists = set(re.findall(r'^%sdef (\w+)' % IND, pcontent, re.MULTILINE))
+    if not (mname in exists and mname in TOOL_METHODS):
+        if elements_file:
+            pcontent = _ensure_elements_import(pcontent, elements_file,
+                                               element_library.to_class_name(elements_file))
+        pcontent = _upsert_class_method(pcontent, page_class, [method_code])
+        _write(ppath, pcontent)
+        result['msg'] += '；页面方法 %s() 已生成/更新到 %s' % (mname, page_file)
+    else:
+        result['msg'] += '；页面方法 %s() 已存在于 %s（不重复生成）' % (mname, page_file)
+    result['page_file'] = page_file
+    result['page_method'] = mname
+    result['page_content'] = pcontent
+    return result
 
 
 if __name__ == '__main__':

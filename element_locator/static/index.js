@@ -102,14 +102,27 @@ async function init() {
   $('tree-search').addEventListener('input', onTreeSearch);
   $('tut-search').addEventListener('input', onTutSearch);
   $('btn-add').addEventListener('click', openModal);
-  $('btn-modal-cancel').addEventListener('click', () => $('modal-mask').style.display = 'none');
-  $('btn-modal-save').addEventListener('click', onSaveElement);
+  $('btn-modal-cancel').addEventListener('click', () => {
+    if (state.continuousAdd) { state.continuousAdd = false; updateContChip(); }
+    $('modal-mask').style.display = 'none';
+  });
+  $('btn-modal-save').addEventListener('click', () => onSaveElement(false));
+  $('btn-modal-save-continue').addEventListener('click', () => onSaveElement(true));
+  // 连续添加：退出悬浮条；已有元素复用面板三按钮
+  $('cont-add-chip').addEventListener('click', () => { state.continuousAdd = false; updateContChip(); });
+  $('btn-dup-reuse').addEventListener('click', () => { const r = dupResolver; closeDupPanel(); if (r) r('reuse'); });
+  $('btn-dup-update').addEventListener('click', () => { const r = dupResolver; closeDupPanel(); if (r) r('update'); });
+  $('btn-dup-cancel').addEventListener('click', () => { const r = dupResolver; closeDupPanel(); if (r) r('cancel'); });
   document.querySelectorAll('input[name="el-purpose"]').forEach(r => r.addEventListener('change', onPurposeChange));
   $('el-op-type').addEventListener('change', onOpTypeChange);
   $('el-op-param').addEventListener('input', updatePreview);
   $('el-case-file').addEventListener('change', onCaseFileChange);
   $('el-case-method').addEventListener('change', updatePreview);
-  $('el-name').addEventListener('input', updatePreview);
+  // 三栏字段变动 → 三个示例代码区实时刷新
+  ['el-name', 'el-value', 'el-comment', 'el-case-comment', 'el-op-comment'].forEach(id => $(id).addEventListener('input', updatePreview));
+  ['el-type', 'el-wait'].forEach(id => $(id).addEventListener('change', updatePreview));
+  $('el-wait-sec').addEventListener('input', updatePreview);
+  $('el-insert-pos').addEventListener('change', () => { renderStepsList(currentSteps()); updatePreview(); });
   $('btn-case-cancel').addEventListener('click', () => $('case-mask').style.display = 'none');
   $('btn-case-save').addEventListener('click', onSaveCase);
   $('btn-step-add').addEventListener('click', () => addStepRow('click'));
@@ -122,15 +135,17 @@ async function init() {
   $('case-ele-file').addEventListener('change', () => {
     if (state.currentCase) state.currentCase.elementsFile = $('case-ele-file').value;
   });
-  // 顶部快速打开：用例 / 元素文件 下拉查看
+  // 顶部快速打开：用例 / 元素文件 / 页面操作 下拉打开编辑
   loadHeaderOpeners();
   $('open-case-sel').addEventListener('change', (e) => { onOpenHdrFile('case', e.target.value); e.target.value = ''; });
   $('open-ele-sel').addEventListener('change', (e) => { onOpenHdrFile('element', e.target.value); e.target.value = ''; });
+  $('open-page-sel').addEventListener('change', (e) => { onOpenHdrFile('page', e.target.value); e.target.value = ''; });
   $('btn-view-close').addEventListener('click', () => { $('view-mask').style.display = 'none'; });
+  $('btn-view-save').addEventListener('click', onSaveHdrFile);
   bindHelpIcons();
 }
 
-/* ---------- 顶部快速打开：用例 / 元素定位文件 查看（只读） ---------- */
+/* ---------- 顶部快速打开：用例 / 元素定位 / 页面操作 文件编辑 ---------- */
 async function loadHeaderOpeners() {
   const cs = await fetch('/api/cases').then(r => r.json()).catch(() => null);
   const caseSel = $('open-case-sel');
@@ -144,16 +159,53 @@ async function loadHeaderOpeners() {
     eleSel.innerHTML = '<option value="">🗂 打开元素文件…</option>' +
       (lib.files || []).map(f => '<option value="' + esc(f) + '">' + esc(f) + '</option>').join('');
   }
+  const pg = await fetch('/api/pages').then(r => r.json()).catch(() => null);
+  const pageSel = $('open-page-sel');
+  if (pg && pg.ok && pageSel) {
+    pageSel.innerHTML = '<option value="">🧩 打开页面操作…</option>' +
+      (pg.pages || []).map(f => '<option value="' + esc(f) + '">' + esc(f) + '</option>').join('');
+  }
 }
+
+// 当前打开的文件（{kind, filename}），保存时用
+let viewFile = null;
 
 async function onOpenHdrFile(kind, filename) {
   if (!filename) return;
-  const q = kind === 'case' ? 'case=' : 'element=';
+  const q = { case: 'case=', element: 'element=', page: 'page=' }[kind];
   const r = await fetch('/api/file_content?' + q + encodeURIComponent(filename)).then(r => r.json()).catch(() => null);
   if (!r || !r.ok) { alert((r && r.msg) || '读取失败'); return; }
+  viewFile = { kind: kind, filename: filename };
   $('view-title').textContent = '📄 ' + r.title;
-  $('view-content').textContent = r.content;
+  $('view-content').value = r.content;
+  setViewStatus('可直接修改，点「💾 保存修改」写回文件（保存前自动做语法检查）', '');
   $('view-mask').style.display = 'flex';
+}
+
+function setViewStatus(msg, cls) {
+  const el = $('view-status');
+  el.textContent = msg;
+  el.className = 'hint' + (cls ? ' ' + cls : '');
+}
+
+async function onSaveHdrFile() {
+  if (!viewFile) return;
+  const btn = $('btn-view-save');
+  btn.disabled = true; btn.textContent = '保存中…';
+  setViewStatus('正在保存…', '');
+  const r = await fetch('/api/save_file', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ kind: viewFile.kind, filename: viewFile.filename, content: $('view-content').value }),
+  }).then(r => r.json()).catch(() => null);
+  btn.disabled = false; btn.textContent = '💾 保存修改';
+  if (!r || !r.ok) {
+    setViewStatus((r && r.msg) || '保存失败：服务异常', 'bad');
+    alert((r && r.msg) || '保存失败：服务异常');
+    return;
+  }
+  setViewStatus('✓ ' + r.msg, 'ok');
+  // 元素/用例/页面文件可能被手改，刷新相关下拉与状态
+  loadHeaderOpeners(); loadLibraryFiles(); loadCaseFiles(); loadPages();
 }
 
 /* ---------- 字段帮助：鼠标移到「?」即显示该字段有什么用 ---------- */
@@ -391,6 +443,8 @@ function selectNode(uid) {
   });
   renderDetail(node);
   highlightShot(node);
+  // 连续添加模式：选中元素即自动弹出「添加到元素库」——点一个录一步，直到退出
+  if (state.continuousAdd) openModal();
 }
 function highlightShot(node) {
   const ov = $('shot-overlay');
@@ -472,9 +526,8 @@ async function loadPages() {
   if (!r || !r.ok) return;
   state.pages = r.pages || [];
   state.elementsAll = r.elements || {};
-  $('case-page-file').innerHTML = ['', '（新建页面）']
-    .concat(state.pages.map(f => f))
-    .map(f => '<option value="' + esc(f) + '">' + (f || '─ 新建页面（下方类名） ─') + '</option>').join('');
+  $('case-page-file').innerHTML = [''].concat(state.pages.map(f => f))
+    .map(f => '<option value="' + esc(f) + '">' + (f || '─ 自动新建页面文件（默认，与用例同名） ─') + '</option>').join('');
   $('case-ele-file').innerHTML = state.eleFiles.map(f => '<option value="' + esc(f) + '">' + esc(f) + '</option>').join('');
 }
 function allElementNames() {
@@ -484,7 +537,7 @@ function allElementNames() {
   });
   return seen;
 }
-function openModal() {
+async function openModal() {
   if (!state.selNode) { alert('请先在截图或元素树里选中一个元素'); return; }
   const node = state.selNode;
   // 自动名称：优先 resource-id 末段，其次 text 截断
@@ -499,27 +552,103 @@ function openModal() {
   $('el-type').innerHTML = ['ID', 'XPATH', 'ACCESSIBILITY_ID', 'ANDROID_UIAUTOMATOR', 'CLASS_NAME', 'NAME']
     .map(t => '<option value="' + t + '"' + (t === loc.type ? ' selected' : '') + '>' + t + '</option>').join('');
   $('el-value').value = loc.value;
+  // 等待时间：每次打开弹窗恢复框架默认 30（上一个元素的设置不串扰）
+  $('el-wait-sec').value = 30;
   $('el-result').className = 'el-result'; $('el-result').textContent = '';
   $('el-content').textContent = '';
-  // 写入文件默认定位器自己的元素库文件（避免误写进框架自带文件）
+  // 写入文件默认定位器自己的元素库文件（避免误写进框架自带文件；③ 会在选目标用例后自动对齐）
   $('el-file').value = state.defaultEleFile || 'locator_gui_elements.py';
-  // 用途默认「仅保存到元素库」；选②时展开用例生成组
+  // 用途默认：已有可追加的用例方法 → 直接选③（三件套一次完成），否则退回①
   document.querySelector('input[name="el-purpose"][value="only"]').checked = true;
   $('el-op-type').innerHTML = STEP_TYPES.map(t => '<option value="' + t.v + '">' + t.n + '</option>').join('');
   $('el-op-type').value = 'click';
   $('el-op-param').value = '';
+  // 步骤描述自动预填：优先元素文本（报告更友好），无文本则留空由后端按元素名生成
+  $('el-op-comment').value = (node.text && node.text.trim()) ? '点击「' + node.text.trim() + '」' : '';
+  $('el-comment').value = '';
+  $('el-case-comment').value = '';
+  $('el-page-file').value = '';
+  closeDupPanel();
+  setElLinkNote('');
+  onOpTypeChange();
+  await loadCaseFiles();
+  const usable = (state.caseFiles || []).some(c =>
+    (c.methods || []).some(m => m !== 'setup_class' && m !== 'teardown_class'));
+  if (usable) document.querySelector('input[name="el-purpose"][value="all"]').checked = true;
   onPurposeChange();
-  loadCaseFiles();
   $('modal-mask').style.display = 'flex';
+}
+/* 用途（①仅元素 / ②+用例 / ③+操作 三件套）：决定流程走到哪一栏 */
+function purposeValue() {
+  const r = document.querySelector('input[name="el-purpose"]:checked');
+  return r ? r.value : 'only';
+}
+function setElLinkNote(msg) {
+  const el = $('el-link-note');
+  if (el) { el.textContent = msg || ''; el.style.display = msg ? '' : 'none'; }
+}
+/* ---- 已有元素复用面板：命中相同定位时弹出，默认「直接复用」防元素库膨胀 ---- */
+let dupResolver = null;
+function askDuplicatePanel(dup) {
+  const used = dup.used_in || [];
+  const usedTxt = used.length
+    ? '已被用例使用：' + used.map(u => u.file + '（' + u.count + ' 处）').join('、')
+    : '暂无用例使用';
+  $('el-dup-info').textContent = '已有元素「' + dup.name + '」（' + dup.filename + '）· ' + usedTxt
+    + '。直接复用不在元素库新增条目，且不阻止你继续添加「用例 + 操作」；'
+    + '「更新元素定义」才会用当前定位/等待覆盖它。';
+  $('el-dup-panel').style.display = '';
+  return new Promise(resolve => { dupResolver = resolve; });
+}
+function closeDupPanel() {
+  $('el-dup-panel').style.display = 'none';
+  dupResolver = null;
+}
+/* ---- 连续添加模式：保存并继续后开启；点截图/元素树选中新元素自动弹出添加窗口 ---- */
+function updateContChip() {
+  const chip = $('cont-add-chip');
+  if (chip) chip.style.display = state.continuousAdd ? '' : 'none';
+}
+/* ---- 目标方法已有步骤 + 插入位置（②栏） ---- */
+function currentSteps() {
+  const f = $('el-case-file').value;
+  const method = $('el-case-method').value;
+  if (!f || !method) return [];
+  const info = (state.caseFiles || []).find(c => c.file === f && (c.method_steps || {})[method]);
+  return info ? (info.method_steps[method] || []) : [];
+}
+function insertPos() { return parseInt($('el-insert-pos').value, 10) || 0; }
+function newStepNo() { const p = insertPos(); return p > 0 ? p + 1 : currentSteps().length + 1; }
+function renderStepsList(steps) {
+  const box = $('el-steps-list');
+  if (!box) return;
+  if (purposeValue() === 'only' || !$('el-case-method').value) { box.innerHTML = ''; box.style.display = 'none'; return; }
+  box.style.display = '';
+  const pos = insertPos();
+  const newNo = pos > 0 ? pos + 1 : steps.length + 1;
+  const step = { type: $('el-op-type').value, element: $('el-name').value.trim() || '<元素名>', param: $('el-op-param').value.trim() };
+  const desc = $('el-op-comment').value.trim() || genStepDesc(step);
+  let html = steps.length
+    ? '<div class="sl-title">当前用例已有 ' + steps.length + ' 步：</div>'
+    : '<div class="sl-title">当前方法还没有步骤，这一步将是第 1 步：</div>';
+  steps.forEach((s, i) => {
+    html += '<div class="sl-row"><span class="sl-idx">' + (i + 1) + '</span><span>' + esc(s) + '</span></div>';
+  });
+  html += '<div class="sl-row new"><span class="sl-idx">' + newNo + '</span><span>➕ 本步：'
+    + esc(desc) + (pos > 0 ? '（插到第 ' + pos + ' 步之后）' : '') + '</span></div>';
+  box.innerHTML = html;
 }
 /* 组装添加元素请求；checkDup=true 时后端先做重复检测（命中返回 duplicate 不落盘） */
 async function saveElement(checkDup) {
+  const waitSec = parseInt($('el-wait-sec').value, 10);
   const payload = {
     filename: $('el-file').value,
     name: $('el-name').value.trim(),
     locator_type: $('el-type').value,
     value: $('el-value').value.trim(),
     wait_type: $('el-wait').value,
+    wait_seconds: (isNaN(waitSec) || waitSec < 1) ? '' : waitSec,  // 空 = 沿用框架默认 30
+    comment: $('el-comment').value.trim(),                          // 元素备注 → 元素行行尾注释
     check_dup: checkDup ? 1 : 0,
   };
   if (!payload.name || !payload.value) { showElResult('元素名称和定位值不能为空', false); return null; }
@@ -528,18 +657,17 @@ async function saveElement(checkDup) {
   if (!r) { showElResult('保存失败：服务异常', false); return null; }
   return r;
 }
-/* 重复元素提示：返回 true=使用已有元素，false=强制新建，null=用户取消 */
-function askDuplicate(dup) {
-  if (!dup) return false;
-  const ok = confirm('发现已有元素「' + dup.name + '」在 ' + dup.filename + ' 中使用相同定位。\n\n' +
-    '点「确定」= 直接使用已有元素（不新建，避免元素库重复）\n点「取消」= 强制新建该重复元素');
-  return ok;
-}
-/* 用途单选：选② → 展开「用例生成组」 */
+/* 用途单选：① 仅元素 → ②③栏熄灭；② 元素+用例 → ③栏只生成用例行；③ 三件套全联动 */
 function onPurposeChange() {
-  const p = document.querySelector('input[name="el-purpose"]:checked').value;
-  $('case-gen-group').style.display = (p === 'case') ? '' : 'none';
-  if (p === 'case') onOpTypeChange();
+  const p = purposeValue();
+  $('col-case').classList.toggle('dim', p === 'only');
+  $('col-op').classList.toggle('dim', p === 'only');
+  $('op-note').textContent = p === 'all'
+    ? '🔗 保存时将自动生成/更新页面操作方法（三件套一次完成）'
+    : (p === 'case' ? '⚠ 不会生成页面方法——目标页面须已存在同名方法，否则执行报错' : '');
+  if (p !== 'only') { onOpTypeChange(); onCaseFileChange(); }
+  else { renderStepsList([]); }
+  updatePreview();
 }
 /* 操作类型切换：参数框按需显隐 + 刷新预览 */
 function onOpTypeChange() {
@@ -573,43 +701,146 @@ function previewLine(step) {
     default: return '';
   }
 }
-function updatePreview() {
-  if ($('case-gen-group').style.display === 'none') return;
-  const name = $('el-name').value.trim() || '<元素名>';
-  const step = { type: $('el-op-type').value, element: name, param: $('el-op-param').value.trim() };
-  $('el-code-preview').textContent = previewLine(step);
+/* 页面方法名预览：与后端 method_name 派生规则一致（sleep/custom 无页面方法） */
+function pageMethodName(step) {
+  const t = step.type, el = step.element || '<元素名>';
+  return {
+    click: 'click_' + el, input: 'input_' + el, long_press: 'long_press_' + el,
+    assert_visible: 'assert_' + el, assert_text: 'assert_' + el + '_text',
+    assert_toast: 'assert_toast', screenshot: 'wait_and_shot', tap: 'tap_xy',
+  }[t] || '';
 }
-/* ---- 目标用例文件 + 方法（两级联动） ---- */
+/* 目标用例的页面文件（来自 /api/cases 的三件套归属信息） */
+function targetPageInfo() {
+  const f = $('el-case-file').value;
+  const info = (state.caseFiles || []).find(c => c.file === f && c.page_file);
+  return info || null;
+}
+/* ---- 三个实时预览：元素代码 / 用例代码 / 页面方法代码（与后端生成规则保持一致） ---- */
+/* 元素栏：将写入元素库的那一行 */
+function elementLinePreview() {
+  const name = $('el-name').value.trim() || '<元素名>';
+  const val = $('el-value').value.trim();
+  const sec = parseInt($('el-wait-sec').value, 10);
+  let line = "self." + name + " = CreateElement.create(Locator_Type." + $('el-type').value
+    + ", '" + escQ(val) + "', wait_type=Wait_By." + $('el-wait').value;
+  if (!isNaN(sec) && sec >= 1) line += ", wait_seconds=" + sec;
+  line += ')';
+  const c = $('el-comment').value.trim();
+  if (c) line += '  # ' + c;
+  return line;
+}
+/* 用例栏：将插入到目标方法的注释行 + 代码行（注释=步骤描述，留空后端自动生成） */
+function caseLinesPreview(step) {
+  const c = $('el-case-comment').value.trim();
+  const desc = c || genStepDesc(step);
+  return '# ' + desc + '\n' + previewLine(step);
+}
+/* 操作栏：选③时将生成到页面文件的页面方法（镜像后端 page_method_code） */
+function pageMethodPreview(step) {
+  const pm = pageMethodName(step);
+  if (!pm) return '（该操作类型无需页面方法）';
+  const el = step.element || '<元素名>';
+  const doc = $('el-op-comment').value.trim() || genStepDesc(step);
+  const t = step.type;
+  let sig = pm, body = '';
+  if (t === 'click') body = 'self.appOperator.click(self._elements.' + el + ')';
+  else if (t === 'input') { sig += '(self, text)'; body = 'self.appOperator.sendText(self._elements.' + el + ', text)'; }
+  else if (t === 'long_press') body = 'self.appOperator.touch_long_press(self._elements.' + el + ', duration_sconds=2)';
+  else if (t === 'assert_visible') body = 'self.appOperator.getElement(self._elements.' + el + ')';
+  else if (t === 'assert_text') { sig += '(self, expected)'; body = "assert self.appOperator.getText(self._elements." + el + ") == expected, '" + escQ(doc) + "'"; }
+  else if (t === 'assert_toast') { sig += '(self, text)'; body = "assert self.appOperator.is_toast_visible(text, wait_seconds=5), '" + escQ(doc) + "'"; }
+  else if (t === 'screenshot') { sig += '(self, tag)'; body = 'import time\ntime.sleep(1)\nself.appOperator.get_screenshot(tag)'; }
+  else if (t === 'tap') { sig += '(self, x, y)'; body = 'self.appOperator.tap(x, y)'; }
+  return 'def ' + sig + ':\n    """' + doc + '"""\n    ' + body.replace(/\n/g, '\n    ');
+}
+function updatePreview() {
+  // 元素代码：任何用途都实时显示（元素栏是必走的第一步）
+  $('el-code-element').textContent = elementLinePreview();
+  const p = purposeValue();
+  const step = {
+    type: $('el-op-type').value,
+    element: $('el-name').value.trim() || '<元素名>',
+    param: $('el-op-param').value.trim(),
+  };
+  // 用例代码 / 页面方法：按用途显示
+  if (p === 'only') {
+    $('el-code-case').textContent = '';
+    $('el-code-preview').textContent = '';
+    return;
+  }
+  $('el-code-case').textContent = caseLinesPreview(step);
+  if (p === 'all') $('el-code-preview').textContent = pageMethodPreview(step);
+  else $('el-code-preview').textContent = '（② 不生成页面方法；目标页面须已存在同名方法）';
+}
+/* ---- 目标用例文件 + 方法（两级联动；③ 时元素文件自动对齐页面引用的元素文件） ---- */
 async function loadCaseFiles() {
   const r = await fetch('/api/cases').then(r => r.json()).catch(() => null);
   if (!r || !r.ok) return;
   state.caseFiles = r.case_info || [];
   const sel = $('el-case-file');
   const cur = sel.value;
-  sel.innerHTML = (state.caseFiles || []).map(c =>
-    '<option value="' + esc(c.file) + '">' + esc(c.file) + '</option>').join('');
-  if (cur && (state.caseFiles || []).some(c => c.file === cur)) sel.value = cur;
-  else if (state.caseFiles && state.caseFiles.length) sel.value = state.caseFiles[0].file;
+  const files = [];
+  (state.caseFiles || []).forEach(c => { if (files.indexOf(c.file) < 0) files.push(c.file); });
+  sel.innerHTML = files.map(f => '<option value="' + esc(f) + '">' + esc(f) + '</option>').join('');
+  if (cur && files.indexOf(cur) >= 0) sel.value = cur;
+  else if (files.length) sel.value = files[0];
   onCaseFileChange();
 }
 function onCaseFileChange() {
   const f = $('el-case-file').value;
-  const info = (state.caseFiles || []).find(c => c.file === f) || { methods: [] };
-  const methods = (info.methods || []).filter(m => m !== 'setup_class' && m !== 'teardown_class');
+  const infos = (state.caseFiles || []).filter(c => c.file === f);
+  const methods = [];
+  infos.forEach(c => (c.methods || []).forEach(m => { if (methods.indexOf(m) < 0) methods.push(m); }));
+  const usable = methods.filter(m => m !== 'setup_class' && m !== 'teardown_class');
   const mSel = $('el-case-method');
-  mSel.innerHTML = methods.length
-    ? methods.map(m => '<option value="' + esc(m) + '">' + esc(m) + '</option>').join('')
+  mSel.innerHTML = usable.length
+    ? usable.map(m => '<option value="' + esc(m) + '">' + esc(m) + '</option>').join('')
     : '<option value="">（该文件暂无可用方法）</option>';
+  // 已有步骤 + 插入位置（漏步骤可插中间；步骤来自方法体的 # 注释，后端 method_steps 解析）
+  const selMethod = mSel.value;
+  const stepsInfo = infos.find(c => (c.method_steps || {})[selMethod]);
+  const steps = (stepsInfo && stepsInfo.method_steps[selMethod]) || [];
+  const posSel = $('el-insert-pos');
+  const curPos = posSel.value;
+  let posOpts = '<option value="0">末尾（成为第 ' + (steps.length + 1) + ' 步）</option>';
+  for (let i = 1; i <= steps.length; i++) {
+    posOpts += '<option value="' + i + '">第 ' + i + ' 步之后 · ' + esc(String(steps[i - 1]).slice(0, 12)) + '</option>';
+  }
+  posSel.innerHTML = posOpts;
+  posSel.value = (curPos !== '' && curPos !== null && parseInt(curPos, 10) <= steps.length) ? curPos : '0';
+  renderStepsList(steps);
+  // 三件套联动：写入元素文件 ← 目标用例页面实际引用的元素文件（必须一致）
+  // 写入页面文件 = 目标用例的 self.page 所在文件（只读展示，跟随用例）
+  const p = purposeValue();
+  const info = infos.find(c => c.page_file);
+  $('el-page-file').value = info ? info.page_file : '';
+  if (p !== 'only' && !info) {
+    setElLinkNote('⚠ 该用例没有页面对象（self.page），③ 无法生成操作——先到「📝 用例工作台」生成');
+  } else if (p === 'all' && info && info.elements_file) {
+    if ($('el-file').value !== info.elements_file) {
+      $('el-file').value = info.elements_file;
+      setElLinkNote('🔗 页面 ' + info.page_file + ' 引用元素文件 ' + info.elements_file + '，「写入元素文件」已自动对齐');
+    } else {
+      setElLinkNote('🔗 三件套去向：页面 ' + info.page_file + ' ← 元素文件 ' + info.elements_file);
+    }
+  } else if (info) {
+    setElLinkNote('该用例的页面: ' + info.page_file + (info.elements_file ? '（元素: ' + info.elements_file + '）' : ''));
+  } else {
+    setElLinkNote('');
+  }
   updatePreview();
 }
 /* 保存：按「用途」单选分流 —— ① 仅保存到元素库 / ② 保存并追加到目标用例方法 */
-async function onSaveElement() {
-  const purpose = document.querySelector('input[name="el-purpose"]:checked').value;
+/* 保存：按「保存到哪一步」分流 ① 仅元素 / ② +用例 / ③ +操作；
+ * continueMode=true（保存并继续）= 保存后回到定位器，开启连续添加（点下一个元素自动弹本窗） */
+async function onSaveElement(continueMode) {
+  const purpose = purposeValue();
   if (!purpose) return;
   const name = $('el-name').value.trim();
-  // 选②：前置校验用例生成组（保存元素前就拦住，避免元素入库了代码却追加不了）
+  // 选②/③：前置校验用例栏（保存元素前就拦住，避免元素入库了代码却追加不了）
   let caseFile = '', methodName = '';
-  if (purpose === 'case') {
+  if (purpose !== 'only') {
     caseFile = $('el-case-file').value;
     methodName = $('el-case-method').value;
     if (!(state.caseFiles || []).some(c => c.file === caseFile)) {
@@ -626,41 +857,58 @@ async function onSaveElement() {
   let r = await saveElement(true);
   if (!r) return;
   let savedName = name;
-  let dupHandled = false;   // 已处理「相同定位重复」：确定=使用已有元素 / 取消=强制新建
+  let dupHandled = false;   // 已处理「相同定位重复」：复用=使用已有元素 / 更新=覆盖定义 / 取消
   if (r.duplicate) {
     dupHandled = true;
-    if (askDuplicate(r.duplicate)) {
-      savedName = r.duplicate.name;        // 直接使用已有元素（不新建，避免元素库重复）
+    const choice = await askDuplicatePanel(r.duplicate);
+    if (choice === 'cancel') { showElResult('已取消，元素未保存（可改用途或直接关闭）', false); return; }
+    if (choice === 'reuse') {
+      savedName = r.duplicate.name;        // 直接复用：不新建，防元素库膨胀；用例+操作继续
     } else {
-      r = await saveElement(false);        // 强制新建
+      r = await saveElement(false);        // 更新元素定义：用当前定位/等待覆盖
+      if (!r || !r.ok) { if (r) showElResult(r.msg, false); return; }
       savedName = $('el-name').value.trim();
     }
   }
   // 非重复场景失败 → 报错返回；重复但已「使用已有元素」→ 继续后续流程
   if (!r || (!r.ok && !dupHandled)) { if (r) showElResult(r.msg, false); return; }
 
+  const finishContinue = () => {
+    loadPages(); loadLibraryFiles(); loadCaseFiles();
+    state.continuousAdd = true;
+    updateContChip();
+    $('modal-mask').style.display = 'none';
+  };
+
   if (purpose === 'only') {
     if (dupHandled && r.duplicate) {
-      showElResult('已使用已有元素「' + savedName + '」（未新建，避免元素库重复）', true);
+      showElResult('已复用已有元素「' + savedName + '」（未新建，避免元素库重复）', true);
     } else {
       if (r.ok && r.content) $('el-content').textContent = r.content;
       showElResult(r.msg + ' —— 已保存到元素库', true);
     }
-    setTimeout(() => { $('modal-mask').style.display = 'none'; }, 600);
+    if (continueMode) finishContinue();
+    else setTimeout(() => { $('modal-mask').style.display = 'none'; }, 600);
     return;
   }
-  // purpose === 'case'：追加一步代码到目标用例方法体末尾
+  // purpose ②/③：追加一步代码到目标用例方法体末尾（③ 同时生成/更新页面方法）
   const step = {
     type: $('el-op-type').value,
     element: savedName,
     param: $('el-op-param').value.trim(),
     desc: '',
+    comment: $('el-op-comment').value.trim(),        // 操作备注 → 页面方法 docstring
+    case_comment: $('el-case-comment').value.trim(), // 用例备注 → 追加行上方注释
   };
   const res = $('el-result');
-  res.className = 'el-result'; res.textContent = '元素已保存，正在追加用例代码…';
+  res.className = 'el-result'; res.textContent = purpose === 'all'
+    ? '元素已保存，正在追加用例代码 + 生成页面操作…'
+    : '元素已保存，正在追加用例代码…';
   const cr = await fetch('/api/add_code', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ case_file: caseFile, method_name: methodName, step: step }),
+    body: JSON.stringify({ case_file: caseFile, method_name: methodName, step: step,
+                           gen_page_method: purpose === 'all' ? 1 : 0,
+                           insert_after_step: insertPos() }),
   }).then(r => r.json()).catch(() => null);
   if (!cr || !cr.ok) {
     showElResult((cr && cr.msg ? cr.msg : '追加用例代码失败：服务异常') + '（元素已保存到元素库）', false);
@@ -668,9 +916,9 @@ async function onSaveElement() {
   }
   res.className = 'el-result ok';
   res.textContent = (dupHandled ? '已使用已有元素「' + savedName + '」' : r.msg)
-    + '；' + cr.msg + '（弹窗可关闭后到用例文件里查看）';
-  $('el-code-preview').textContent = cr.line;
-  // 展示追加后的目标方法片段（方便确认追加位置正确）
+    + '；' + cr.msg + '（三件套已联动完成）';
+  // 展示追加后的目标方法片段 + ③ 生成的页面方法片段（方便确认写入位置）
+  let snippets = [];
   if (cr.content) {
     const lines = cr.content.split('\n');
     const idx = lines.findIndex(l => l.indexOf('def ' + methodName) >= 0);
@@ -679,10 +927,24 @@ async function onSaveElement() {
       for (let i = idx + 1; i < lines.length; i++) {
         if (lines[i] && !/^\s/.test(lines[i])) { end = i; break; }
       }
-      $('el-content').textContent = lines.slice(Math.max(0, idx - 2), end).join('\n');
+      snippets.push('# ' + caseFile + ' :: ' + methodName + '\n' + lines.slice(Math.max(0, idx - 2), end).join('\n'));
     }
   }
-  // 刷新页面/元素/用例列表（可能有新元素、新页面对象）
+  if (purpose === 'all' && cr.page_content && cr.page_method) {
+    const plines = cr.page_content.split('\n');
+    const pidx = plines.findIndex(l => l.indexOf('def ' + cr.page_method) >= 0);
+    if (pidx >= 0) {
+      let pend = plines.length;
+      for (let i = pidx + 1; i < plines.length; i++) {
+        // 方法体结束：下一个类级 class 或同级 def
+        if (/^(class |    def )/.test(plines[i])) { pend = i; break; }
+      }
+      snippets.push('\n# ' + cr.page_file + ' :: ' + cr.page_method + '\n' + plines.slice(pidx, pend).join('\n').replace(/^\n+/, ''));
+    }
+  }
+  if (snippets.length) $('el-content').textContent = snippets.join('\n\n');
+  // 刷新页面/元素/用例列表（可能有新元素、新页面对象/新方法）；保存并继续 → 连续添加模式
+  if (continueMode) { finishContinue(); return; }
   loadPages(); loadLibraryFiles(); loadCaseFiles();
 }
 
@@ -692,12 +954,12 @@ function showElResult(msg, ok) {
   box.textContent = msg;
 }
 
-/* ---------- 用例工作台（元素库 → 页面对象 → 用例 三件套联动） ---------- */
+/* ---------- 用例工作台（用例 = 步骤列表；每步 = 元素 + 操作） ---------- */
 function defaultCurrentCase() {
   return {
-    caseFile: 'test_login.py', caseClass: 'TestLogin', methodName: 'test_login',
+    caseFile: 'test_login.py', methodName: 'test_login',
     desc: '', pkg: 'com.recordlife.kuaige', activity: 'com.recordlife.kuaige.feature.main.MainActivity',
-    genPage: true, pageFile: '', pageClass: '',
+    pageFile: '',
     elementsFile: state.defaultEleFile || 'locator_gui_elements.py',
     genTeardown: true, steps: [],
   };
@@ -718,49 +980,85 @@ function openCaseModal() {
   // 同步下拉数据（页面文件/元素文件）
   if (!state.pages.length) loadPages();
   if (!state.eleFiles.length) loadLibraryFiles();
-  // 表单回填
+  // 表单回填（类名、页面类名、是否生成页面均自动处理，无需表单字段）
   $('case-file').value = c.caseFile;
-  $('case-class').value = c.caseClass;
   $('case-method').value = c.methodName;
   $('case-desc').value = c.desc;
   $('case-pkg').value = c.pkg;
   $('case-activity').value = c.activity;
   $('case-page-file').value = c.pageFile || '';
-  $('case-page-class').value = c.pageClass || '';
   $('case-ele-file').value = c.elementsFile || state.defaultEleFile;
-  $('case-gen-page').checked = c.genPage;
   $('case-gen-teardown').checked = c.genTeardown;
   $('case-result').className = 'el-result'; $('case-result').textContent = '';
   $('case-preview-content').textContent = '';
   renderCaseSteps();
   $('case-mask').style.display = 'flex';
 }
-/* 文件名/页面名变化 → 自动补类名、方法名（半自动命名） */
-function toPascalCase(s) {
-  return String(s || '').replace(/\.py$/, '').split(/[_\s]+/).filter(Boolean)
-    .map(w => w[0].toUpperCase() + w.slice(1)).join('');
-}
+/* 文件名变化 → 自动补方法名（半自动命名） */
 function syncCaseNames() {
   const c = ensureCurrentCase();
   const file = $('case-file').value.trim();
   if (file) {
     const base = file.replace(/^test_/, '').replace(/\.py$/, '').split(/[_\s]+/).filter(Boolean).join('_');
-    if (!$('case-class').dataset.touched) $('case-class').value = 'Test' + toPascalCase(base);
     if (!$('case-method').dataset.touched) $('case-method').value = 'test_' + base;
   }
   c.caseFile = file;
-  c.caseClass = $('case-class').value.trim();
   c.methodName = $('case-method').value.trim();
-  const pf = $('case-page-file').value;
-  c.pageFile = pf;
-  if (pf && !$('case-page-class').dataset.touched) $('case-page-class').value = toPascalCase(pf);
-  c.pageClass = $('case-page-class').value.trim();
+  c.pageFile = $('case-page-file').value;
 }
 /* 步骤列表：增删 / 排序 / 行内编辑 */
 function addStepRow(type) {
   const step = { type: type || 'click', element: '', param: '', desc: '' };
   if (type === 'custom') step.param = 'page.xxx()  # 自定义';
   pushStep(step);
+}
+/* ---- 元素名绑定：用例步骤的元素名 ↔ 元素库 self.元素名 必须一致 ---- */
+/* 元素名 → 所在元素文件列表（state.elementsAll = {文件: [元素名...]}） */
+function filesOfElement(name) {
+  return Object.keys(state.elementsAll || {}).filter(f => (state.elementsAll[f] || []).indexOf(name) >= 0);
+}
+/* 元素名变动 → 校验 + 联动：不在库 = 红框警示；在别的文件 = 自动切换「引用元素文件」 */
+function syncEleBinding(s, input) {
+  const name = (s.element || '').trim();
+  if (!name) {
+    input.classList.remove('missing');
+    input.title = '从元素库选或手输元素名';
+    return;
+  }
+  const files = filesOfElement(name);
+  if (!files.length) {
+    input.classList.add('missing');
+    input.title = '元素库里没有「' + name + '」——用例和元素库的元素名必须完全一致才能执行，请从下拉选择或先添加该元素';
+    return;
+  }
+  input.classList.remove('missing');
+  input.title = '元素在: ' + files.join('、');
+  const cur = $('case-ele-file').value;
+  if (files.indexOf(cur) < 0) {
+    $('case-ele-file').value = files[0];
+    if (state.currentCase) state.currentCase.elementsFile = files[0];
+    setBindNote('🔗 元素「' + name + '」在 ' + files[0] + '，「引用元素文件」已自动切换保持一致');
+  }
+}
+function setBindNote(msg) {
+  const el = $('case-bind-note');
+  if (el) { el.textContent = msg || ''; el.style.display = msg ? '' : 'none'; }
+}
+/* 生成预览：随步骤实时更新（元素名 → 页面方法名 → 用例代码行 的派生关系所见即所得） */
+function updateCasePreview() {
+  const c = state.currentCase;
+  if (!c || !c.steps.length) { $('case-preview-content').textContent = ''; return; }
+  const lines = [];
+  c.steps.forEach((s, i) => {
+    const line = previewLine({ type: s.type, element: s.element, param: s.param });
+    if (!line) return;
+    lines.push('# ' + (i + 1) + '. ' + (s.desc || genStepDesc(s)));
+    const t = stepTypeInfo(s.type);
+    let mark = '';
+    if (t.el && s.element && !filesOfElement(s.element).length) mark = '   # ⚠ 元素库中未找到 ' + s.element;
+    lines.push(line + mark);
+  });
+  $('case-preview-content').textContent = lines.join('\n');
 }
 function renderCaseSteps() {
   const box = $('case-steps');
@@ -769,6 +1067,13 @@ function renderCaseSteps() {
   const names = allElementNames();
   const eleOpts = names.map(n => '<option value="' + esc(n) + '">' + esc(n) + '</option>').join('');
   box.innerHTML = '<datalist id="ele-list">' + eleOpts + '</datalist>';
+  // 列头：与步骤行的列对齐（序号/做什么/哪个元素/参数/备注/排序删除）
+  if (c && c.steps.length) {
+    box.insertAdjacentHTML('beforeend',
+      '<div class="step-cols"><span class="step-idx">#</span><span class="st-type">做什么</span>' +
+      '<span class="st-ele">哪个元素</span><span class="st-param">参数</span>' +
+      '<span class="st-desc">备注</span><span class="step-btns"></span></div>');
+  }
   (c ? c.steps : []).forEach((s, i) => {
     const row = document.createElement('div');
     row.className = 'step-row';
@@ -799,9 +1104,11 @@ function renderCaseSteps() {
       qParam.placeholder = nt.ph || '参数';
       s.desc = genStepDesc(s);
       qDesc.value = s.desc;
+      syncEleBinding(s, qEle);
+      updateCasePreview();
     });
-    qEle.addEventListener('input', () => { s.element = qEle.value.trim(); s.desc = genStepDesc(s); qDesc.value = s.desc; });
-    qParam.addEventListener('input', () => { s.param = qParam.value.trim(); s.desc = genStepDesc(s); qDesc.value = s.desc; });
+    qEle.addEventListener('input', () => { s.element = qEle.value.trim(); s.desc = genStepDesc(s); qDesc.value = s.desc; syncEleBinding(s, qEle); updateCasePreview(); });
+    qParam.addEventListener('input', () => { s.param = qParam.value.trim(); s.desc = genStepDesc(s); qDesc.value = s.desc; updateCasePreview(); });
     qDesc.addEventListener('input', () => { s.desc = qDesc.value.trim(); });
     row.querySelector('[data-act=up]').addEventListener('click', () => { if (i > 0) { c.steps.splice(i - 1, 0, c.steps.splice(i, 1)[0]); renderCaseSteps(); } });
     row.querySelector('[data-act=down]').addEventListener('click', () => { if (i < c.steps.length - 1) { c.steps.splice(i + 1, 0, c.steps.splice(i, 1)[0]); renderCaseSteps(); } });
@@ -812,36 +1119,60 @@ function renderCaseSteps() {
     qParam.placeholder = t.ph || '参数';
     box.appendChild(row);
   });
+  // 渲染后统一刷新绑定状态（红框警示/文件归属）与实时预览
+  box.querySelectorAll('.step-row').forEach((row, i) => {
+    const s = c.steps[i];
+    if (s) syncEleBinding(s, row.querySelector('.st-ele'));
+  });
+  updateCasePreview();
   if (!c || !c.steps.length) {
     box.insertAdjacentHTML('beforeend', '<div class="empty steps-empty">还没有步骤。<br>① 点下方「从元素库添加步骤」，选元素 + 操作类型逐条拼；<br>② 或「自定义代码步骤」写任意代码行兜底（高级）。<br><span class="hint">（「添加到元素库」→「② 保存并添加到用例」会把一步代码直接追加到已有用例文件，不进这里）</span></div>');
   }
 }
-/* 收集表单 → 生成用例（+页面对象） */
+/* 收集表单 → 生成用例（操作自动写入页面文件；类名由后端按文件名自动派生） */
 async function onSaveCase() {
   const c = ensureCurrentCase();
   c.caseFile = $('case-file').value.trim();
-  c.caseClass = $('case-class').value.trim();
   c.methodName = $('case-method').value.trim();
   c.desc = $('case-desc').value.trim();
   c.pkg = $('case-pkg').value.trim();
   c.activity = $('case-activity').value.trim();
-  c.pageFile = $('case-page-file').value.trim();
-  c.pageClass = $('case-page-class').value.trim();
+  c.pageFile = $('case-page-file').value;
   c.elementsFile = $('case-ele-file').value;
-  c.genPage = $('case-gen-page').checked;
   c.genTeardown = $('case-gen-teardown').checked;
   const res = $('case-result');
   if (!c.caseFile || !c.methodName) { res.className = 'el-result err'; res.textContent = '用例文件名和测试方法名不能为空'; return; }
   if (!c.steps.length) { res.className = 'el-result err'; res.textContent = '还没有任何步骤，请先添加步骤（或用定位器快捷添加）'; return; }
+  // 元素名绑定校验：用例引用的元素必须真实存在于元素库，且都能由「引用元素文件」提供
+  // （一个页面文件只能引用一个元素文件，元素名对不上执行时就会找不到元素）
+  const missing = [];
+  const outside = [];
+  c.steps.forEach(s => {
+    const t = stepTypeInfo(s.type);
+    if (!t.el || !s.element) return;
+    const files = filesOfElement(s.element);
+    if (!files.length) { missing.push(s.element); return; }
+    if (files.indexOf(c.elementsFile) < 0) outside.push(s.element + '（在 ' + files.join('、') + '）');
+  });
+  if (missing.length) {
+    res.className = 'el-result err';
+    res.textContent = '元素库里找不到：' + missing.join('、') + ' —— 用例和元素库的元素名必须完全一致才能执行，请从元素下拉重新选择或先添加元素';
+    return;
+  }
+  if (outside.length) {
+    res.className = 'el-result err';
+    res.textContent = '以下元素不在「引用元素文件」' + c.elementsFile + ' 里：' + outside.join('；')
+      + '。一个页面文件只能引用一个元素文件，请把元素移到同一文件，或改选元素实际所在的文件';
+    return;
+  }
   // 页面文件为空时自动生成默认名（如 login → loginPage.py）
   const pageFile = c.pageFile || (c.caseFile.replace(/^test_/, '').replace(/\.py$/, '') + 'Page.py');
   c.pageFile = pageFile;
-  if (!c.pageClass) c.pageClass = toPascalCase(pageFile);
   const payload = {
     case_file: c.caseFile, method_name: c.methodName, desc: c.desc,
     pkg: c.pkg, activity: c.activity,
-    case_class: c.caseClass, page_file: pageFile, page_class: c.pageClass,
-    elements_file: c.elementsFile, gen_page: c.genPage ? 1 : 0, gen_teardown: c.genTeardown ? 1 : 0,
+    page_file: pageFile,
+    elements_file: c.elementsFile, gen_page: 1, gen_teardown: c.genTeardown ? 1 : 0,
     steps: c.steps,
   };
   res.className = 'el-result'; res.textContent = '生成中…';

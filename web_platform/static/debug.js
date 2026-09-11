@@ -7,13 +7,14 @@
 'use strict';
 
 let DBG_ITEMS = [];      // 检查项规格 [{id,file,title}]
+let DBG_FUNCS = [];      // 框架文件自动识别目录 [{file, module, error, entries}]
 let DBG_RESULTS = {};    // id -> result（实时为空对象；查看历史快照时填充）
 let DBG_FILTER = '';     // '' | 'PASS' | 'FAIL' | 'SKIP'
 let DBG_RECORD = null;   // 正在查看的历史记录
 let DBG_RUNNING = false;
 let REC_PAGE = 1;
 let DBG_VIEW = 'overview';
-let DBG_TOOL = 'http_request';
+let DBG_TOOL = 'methods';
 let PO_ROWS = [];        // 新增 PO 的元素行
 
 /* ---------------- 模块（文件夹）元数据 ---------------- */
@@ -29,6 +30,12 @@ const MODULE_META = {
   other: {name: '其他', icon: '📁', desc: ''},
 };
 const MODULE_ORDER = ['common', 'pojo', 'base', 'init', 'page_objects', 'cases', 'platform', 'sweep', 'other'];
+
+const FILE_DISP_MAX = 20;
+function dbgFileCell(file) {
+  const disp = file.length > FILE_DISP_MAX ? file.slice(0, FILE_DISP_MAX) + '…' : file;
+  return '<span class="file-cell" title="点击复制完整路径：' + esc(file) + '" data-copy="' + esc(file) + '">' + esc(disp) + '</span>';
+}
 
 function dbgModuleOf(file) {
   if (file.startsWith('平台接口') || file.startsWith('环境探测')) return 'platform';
@@ -116,7 +123,7 @@ function dbgRender() {
       return '<tr class="dbg-row" data-id="' + esc(it.id) + '" data-status="' + stt + '">' +
         '<td style="width:40%"><b>' + esc(it.title) + '</b>' +
         '<div class="muted" style="font-size:12px">' + esc(it.id) + '</div></td>' +
-        '<td class="muted" style="font-size:12px">' + esc(it.file) + '</td>' +
+        '<td class="muted" style="font-size:12px">' + dbgFileCell(it.file) + '</td>' +
         '<td class="cell-status">' + stHtml + '</td>' +
         '<td class="cell-dur muted">' + (r ? r.duration_ms + 'ms' : '-') + '</td>' +
         '<td style="width:150px"><button class="ghost mini dbg-run" data-id="' + esc(it.id) + '">▶ 调试</button>' +
@@ -124,11 +131,25 @@ function dbgRender() {
         (r ? '<tr class="detail-row" data-for="' + esc(it.id) + '" style="display:none"><td colspan="5">' +
           '<pre class="detail-pre">' + esc((r.error ? '❌ ' + r.error + '\n' : '') + (r.detail || '-')) + '</pre></td></tr>' : '');
     }).join('');
+    // 自动识别：该模块下没有专项检查的框架文件，随文件增减自动出现/消失
+    const checked = new Set(items.map(it => it.file.split(' + ')[0]));
+    const autoFiles = DBG_FUNCS.filter(f => dbgModuleOf(f.file) === m && !checked.has(f.file));
+    const autoRows = autoFiles.map(f => {
+      const ok = !f.error;
+      const st = ok ? '<span class="status st-PASSED">可导入</span>' : '<span class="status st-FAILED">导入失败</span>';
+      return '<tr class="dbg-row auto-row" data-status="' + (ok ? 'PASS' : 'FAIL') + '">' +
+        '<td><span class="auto-tag">🤖 自动识别</span></td>' +
+        '<td class="muted" style="font-size:12px">' + dbgFileCell(f.file) + '</td>' +
+        '<td class="cell-status">' + st + '</td>' +
+        '<td class="cell-dur muted">' + f.entries.length + ' 方法</td>' +
+        '<td>' + (f.error ? '<span class="num-bad" style="font-size:12px">' + esc(f.error) + '</span>' : '<span class="muted" style="font-size:12px">导入验证覆盖</span>') + '</td></tr>';
+    }).join('');
+    const autoSection = autoRows ? '<tr class="auto-head"><td colspan="5" class="muted" style="font-size:12px">🤖 自动识别文件（' + autoFiles.length + '）· 无专项检查，由全框架导入验证覆盖 · 交互调试可调用其方法</td></tr>' + autoRows : '';
     return '<div class="card dbg-group" id="mod-' + m + '">' +
-      '<h3>' + meta.icon + ' ' + esc(meta.name) + ' <span class="muted" style="font-size:12px">' + esc(meta.desc) + '（' + items.length + ' 项）</span>' +
+      '<h3>' + meta.icon + ' ' + esc(meta.name) + ' <span class="muted" style="font-size:12px">' + esc(meta.desc) + '（' + items.length + ' 项检查' + (autoFiles.length ? ' + ' + autoFiles.length + ' 自动识别' : '') + '）</span>' +
       '<span style="float:right">' + pill + '</span></h3>' +
       '<div class="tblwrap"><table><thead><tr><th>调试项</th><th>归属文件</th><th>结果</th><th>耗时</th><th>操作</th></tr></thead>' +
-      '<tbody>' + rows + '</tbody></table></div></div>';
+      '<tbody>' + rows + autoSection + '</tbody></table></div></div>';
   }).join('');
   dbgApplyFilter();
   dbgUpdateStats();
@@ -268,118 +289,121 @@ function dbgShowBanner(record) {
   $('#btnBackLive').addEventListener('click', dbgBackToLive);
 }
 
-/* ================= 交互调试工具 ================= */
-const LOCATOR_TYPES = ['ID', 'XPATH', 'CLASS_NAME', 'ACCESSIBILITY_ID', 'ANDROID_UIAUTOMATOR', 'ANDROID_VIEWTAG',
-  'ANDROID_DATA_MATCHER', 'CSS_SELECTOR', 'LINK_TEXT', 'PARTIAL_LINK_TEXT', 'TAG_NAME', 'NAME', 'IMAGE',
-  'IOS_CLASS_CHAIN', 'IOS_PREDICATE', 'IOS_UIAUTOMATION'];
-const WAIT_TYPES = ['', 'VISIBILITY_OF', 'PRESENCE_OF_ELEMENT_LOCATED', 'ELEMENT_TO_BE_CLICKABLE',
-  'ELEMENT_LOCATED_TO_BE_SELECTED', 'TITLE_IS', 'TITLE_CONTAINS'];
+/* ================= 方法调试（调试对象 = 框架真实方法，目录自动识别） ================= */
+let DBG_FUNCS_FLAT = [];   // [{target,file,cls,name,kind,params,ctor_params,instantiable,doc}]
+let DBG_CALL_TARGET = null;
 
-const DBG_TOOLS = {
-  http_request: {name: '🌐 HTTP 请求', fields: [
-    {k: 'url', label: '完整 URL', type: 'text', ph: 'https://example.com/api?q=1', required: true},
-    {k: 'method', label: '请求方式', type: 'select', options: ['get', 'post_form', 'put'], def: 'get'},
-    {k: 'params', label: '参数（JSON 对象，可空）', type: 'textarea', ph: '{"wd": "apitest"}'},
-    {k: 'headers', label: '请求头（JSON 对象，可空）', type: 'textarea', ph: '{"X-Debug": "1"}'},
-    {k: 'timeout', label: '超时秒数（1-45）', type: 'text', def: '20'},
-  ]},
-  text_assert: {name: '🔤 文本断言', fields: [
-    {k: 'source', label: '被检文本', type: 'textarea', ph: '订单金额：123.45 元', required: true},
-    {k: 'pattern', label: '正则表达式', type: 'text', ph: '金额：([0-9.]+)', required: true},
-  ]},
-  element_build: {name: '🎯 元素构造', fields: [
-    {k: 'locator_type', label: '定位方式', type: 'select', options: LOCATOR_TYPES, def: 'ID'},
-    {k: 'locator_value', label: '定位值', type: 'text', ph: 'com.app:id/btn', required: true},
-    {k: 'expected_value', label: '期望值（可选）', type: 'text'},
-    {k: 'wait_type', label: '等待类型（可选）', type: 'select', options: WAIT_TYPES},
-    {k: 'wait_seconds', label: '等待秒数（可选）', type: 'text', ph: '10'},
-  ]},
-};
+function dbgBuildFuncIndex() {
+  DBG_FUNCS_FLAT = [];
+  (DBG_FUNCS || []).forEach(f => {
+    (f.entries || []).forEach(e => DBG_FUNCS_FLAT.push(Object.assign({}, e, {file: f.file})));
+  });
+}
 
 function dbgRenderToolTabs() {
   $('#toolTabs').innerHTML =
-    Object.keys(DBG_TOOLS).map(k =>
-      '<button class="ttab2' + (DBG_TOOL === k ? ' on' : '') + '" data-tool="' + k + '">' + DBG_TOOLS[k].name + '</button>').join('') +
+    '<button class="ttab2' + (DBG_TOOL !== 'po' ? ' on' : '') + '" data-tool="methods">🔎 方法调试（框架真实方法）</button>' +
     '<button class="ttab2' + (DBG_TOOL === 'po' ? ' on' : '') + '" data-tool="po">📄 新增 PO</button>';
-}
-
-function fieldHtml(k, f) {
-  const ph = f.ph ? ' placeholder="' + esc(f.ph) + '"' : '';
-  const def = f.def ? ' value="' + esc(f.def) + '"' : '';
-  if (f.type === 'textarea') return '<div class="field" style="grid-column:1/-1"><label>' + esc(f.label) + '</label><textarea id="tf-' + k + '" rows="3"' + ph + '></textarea></div>';
-  if (f.type === 'select') {
-    return '<div class="field"><label>' + esc(f.label) + '</label><select id="tf-' + k + '">' +
-      f.options.map(o => '<option value="' + esc(o) + '"' + (o === f.def ? ' selected' : '') + '>' + (o || '（不等待）') + '</option>').join('') + '</select></div>';
-  }
-  return '<div class="field"><label>' + esc(f.label) + '</label><input type="text" id="tf-' + k + '"' + ph + def + '></div>';
 }
 
 function dbgRenderToolForm() {
   if (DBG_TOOL === 'po') { dbgRenderPoForm(); return; }
-  const t = DBG_TOOLS[DBG_TOOL];
-  $('#toolForm').innerHTML = '<div class="fields">' + t.fields.map(f => fieldHtml(t === DBG_TOOLS.http_request ? f.k : f.k, f)).join('') + '</div>' +
-    '<div class="mt"><button id="btnToolRun">▶ 运行调试</button></div>';
-  $('#btnToolRun').addEventListener('click', dbgRunTool);
-  $('#toolResult').innerHTML = '<p class="muted">填写参数后运行，结果展示在这里。</p>';
-}
-
-function collectToolParams() {
-  const t = DBG_TOOLS[DBG_TOOL];
-  const params = {};
-  t.fields.forEach(f => {
-    const el = $('#tf-' + f.k);
-    if (!el) return;
-    params[f.k] = el.value.trim();
+  $('#toolForm').innerHTML =
+    '<div class="field" style="max-width:420px;margin-bottom:10px"><label>搜索方法（目标 / 文档）</label>' +
+    '<input type="text" id="methodSearch" placeholder="strTool / DateTimeTool / toast / doRequest…"></div>' +
+    '<div class="mdebug"><div id="methodTree" class="mtree"></div>' +
+    '<div id="callPane" style="flex:1;min-width:0"></div></div>';
+  $('#methodSearch').addEventListener('input', dbgRenderMethodTree);
+  $('#methodTree').addEventListener('click', (e) => {
+    const item = e.target.closest('.mtree-item');
+    if (!item) return;
+    DBG_CALL_TARGET = item.dataset.target;
+    dbgRenderMethodTree();
+    dbgRenderCallForm();
   });
-  if (DBG_TOOL === 'http_request') {
-    ['params', 'headers'].forEach(k => {
-      if (params[k]) {
-        try { params[k] = JSON.parse(params[k]); }
-        catch (e) { throw new Error(k + ' 不是合法 JSON: ' + e.message); }
-      } else delete params[k];
-    });
-  }
-  return params;
+  dbgRenderMethodTree();
+  $('#callPane').innerHTML = '<p class="muted">左侧选择一个框架方法（目录由框架文件自动识别）。</p>';
 }
 
-async function dbgRunTool() {
-  const btn = $('#btnToolRun');
-  let params;
-  try { params = collectToolParams(); }
-  catch (e) { return toast(e.message, false); }
+function dbgRenderMethodTree() {
+  const q = (($('#methodSearch') || {}).value || '').trim().toLowerCase();
+  const byFile = {};
+  DBG_FUNCS_FLAT
+    .filter(m => !q || m.target.toLowerCase().includes(q) || (m.doc || '').toLowerCase().includes(q))
+    .forEach(m => (byFile[m.file] = byFile[m.file] || []).push(m));
+  const files = Object.keys(byFile).sort();
+  $('#methodTree').innerHTML = files.map(f =>
+    '<div class="mtree-file">' + esc(f) + '</div>' +
+    byFile[f].map(m =>
+      '<div class="mtree-item' + (DBG_CALL_TARGET === m.target ? ' on' : '') + '" data-target="' + esc(m.target) + '" title="' + esc(m.doc) + '">' +
+      '<b>' + esc(m.cls ? m.cls + '.' + m.name : m.name) + '</b>' +
+      '<span class="muted">' + esc('(' + m.params.map(p => p.name + (p.required ? '' : '?')).join(', ') + ')') + '</span></div>').join('')
+  ).join('') || '<p class="muted">无匹配方法</p>';
+}
+
+function dbgRenderCallForm() {
+  const m = DBG_FUNCS_FLAT.find(x => x.target === DBG_CALL_TARGET);
+  const pane = $('#callPane');
+  if (!m) { pane.innerHTML = '<p class="muted">方法不存在</p>'; return; }
+  const notInstantiable = !m.instantiable && m.ctor_params.length > 0;
+  const ctorHtml = (m.ctor_params.length && m.instantiable)
+    ? '<h4>构造参数（用于创建实例）</h4><div class="fields">' + m.ctor_params.map(p => dbgParamField('ctor', p)).join('') + '</div>'
+    : '';
+  const warn = notInstantiable
+    ? '<p class="num-bad">⚠ 该类构造需要运行时对象（' + m.ctor_params.map(p => p.name).join(', ') +
+      '），无法脱离设备 / 服务调试，运行会得到明确报错</p>'
+    : '';
+  pane.innerHTML = '<h4 class="muted" style="margin-top:0">' + esc(m.target) + '</h4>' +
+    (m.doc ? '<p class="muted">' + esc(m.doc) + '</p>' : '') +
+    '<p class="muted" style="font-size:12px">类型: ' + esc(m.kind) + (notInstantiable ? ' · 不可自动实例化' : '') + '</p>' +
+    warn + ctorHtml +
+    '<h4>方法参数' + (m.params.length ? '' : '（无）') + '</h4>' +
+    (m.params.length ? '<div class="fields">' + m.params.map(p => dbgParamField('arg', p)).join('') + '</div>' : '') +
+    '<div class="mt"><button id="btnCallRun"' + (notInstantiable ? '' : '') + '>▶ 运行调试</button></div>' +
+    '<div id="callResult" class="mt"></div>';
+  $('#btnCallRun').addEventListener('click', dbgRunCall);
+}
+
+function dbgParamField(prefix, p) {
+  const ph = p.required ? '必填' : ('留空 = 默认 ' + (p.default === null ? '无' : p.default));
+  return '<div class="field"><label>' + esc(p.name) + (p.required ? ' <b class="num-bad">*</b>' : '') +
+    (p.annotation ? ' <span class="muted">(' + esc(p.annotation) + ')</span>' : '') + '</label>' +
+    '<input type="text" data-prefix="' + prefix + '" data-name="' + esc(p.name) + '" placeholder="' + esc(ph) + '"></div>';
+}
+
+async function dbgRunCall() {
+  const ctor_args = {}, args = {};
+  document.querySelectorAll('#callPane input[data-name]').forEach(el => {
+    const v = el.value.trim();
+    if (el.dataset.prefix === 'ctor') ctor_args[el.dataset.name] = v;
+    else args[el.dataset.name] = v;
+  });
+  const btn = $('#btnCallRun');
   btn.disabled = true; btn.textContent = '⏳ 运行中…';
-  $('#toolResult').innerHTML = '<p class="muted">运行中…</p>';
+  $('#callResult').innerHTML = '<p class="muted">运行中…</p>';
   try {
-    const d = await postJson('/api/debug/tool', {tool: DBG_TOOL, params: params});
-    if (!d.ok) { $('#toolResult').innerHTML = '<div class="err">✗ ' + esc(d.msg || '执行失败') + '</div>'; return; }
+    const d = await postJson('/api/debug/tool',
+      {tool: '__call__', params: {target: DBG_CALL_TARGET, ctor_args: ctor_args, args: args}});
+    if (!d.ok) { $('#callResult').innerHTML = '<div class="err">✗ ' + esc(d.msg || '执行失败') + '</div>'; return; }
     const r = d.result;
-    if (!r.ok) { $('#toolResult').innerHTML = '<div class="err">✗ ' + esc(r.msg || '执行失败') + '</div>'; return; }
-    dbgRenderToolResult(r.data);
+    if (!r.ok) {
+      $('#callResult').innerHTML = '<div class="err">✗ ' + esc(r.msg || '执行失败') + '</div>' +
+        (r.traceback ? '<pre class="codebox">' + esc(r.traceback) + '</pre>' : '');
+      return;
+    }
+    const data = r.data;
+    const ret = data.return;
+    const valHtml = ret.kind === 'json'
+      ? '<pre class="codebox">' + esc(JSON.stringify(ret.value, null, 2)) + '</pre>'
+      : '<pre class="codebox">' + esc(ret.value) + '</pre>';
+    $('#callResult').innerHTML =
+      '<div class="meta"><span>返回类型 <b>' + esc(ret.type) + '</b></span><span>耗时 <b>' + data.duration_ms + 'ms</b></span></div>' +
+      '<h4>返回值</h4>' + valHtml +
+      (data.stdout ? '<h4>方法内部输出 (stdout)</h4><pre class="codebox">' + esc(data.stdout) + '</pre>' : '');
   } catch (e) {
-    $('#toolResult').innerHTML = '<div class="err">✗ 请求异常: ' + esc(String(e)) + '</div>';
+    $('#callResult').innerHTML = '<div class="err">✗ 请求异常: ' + esc(String(e)) + '</div>';
   } finally {
     btn.disabled = false; btn.textContent = '▶ 运行调试';
-  }
-}
-
-function dbgRenderToolResult(data) {
-  if (DBG_TOOL === 'http_request') {
-    $('#toolResult').innerHTML =
-      '<div class="meta"><span>状态码 <b class="' + (data.status_code === 200 ? 'num-ok' : 'num-bad') + '">' + data.status_code + '</b></span>' +
-      '<span>响应长度 <b>' + data.body_length + '</b></span></div>' +
-      '<h4 class="mt">响应体</h4><pre class="codebox">' + esc(data.body) + '</pre>' +
-      '<h4 class="mt muted">请求回显</h4><pre class="codebox">' + esc(JSON.stringify(data.request, null, 2)) + '</pre>';
-  } else if (DBG_TOOL === 'text_assert') {
-    $('#toolResult').innerHTML =
-      '<div class="meta"><span>匹配 <b class="' + (data.matched ? 'num-ok' : 'num-bad') + '">' + (data.matched ? '成功' : '失败') + '</b></span>' +
-      '<span>匹配到 <b>' + data.match_count + '</b> 处</span>' +
-      '<span>AssertTool: <b>' + data.assertTool_isRegularMatch + '</b></span>' +
-      '<span>hamcrest: <b>' + data.hamcrest_is_match_by_regexp + '</b></span></div>' +
-      '<h4 class="mt">匹配内容</h4><pre class="codebox">' + esc(JSON.stringify({first: data.match_text, groups: data.groups, all: data.all_matches}, null, 2)) + '</pre>';
-  } else if (DBG_TOOL === 'element_build') {
-    $('#toolResult').innerHTML =
-      '<h4>ElementInfo 数据</h4><pre class="codebox">' + esc(JSON.stringify(data, null, 2).replace('"code"', '_code_')) + '</pre>' +
-      '<p class="muted">可直接粘贴到元素仓库文件中的写法：</p><pre class="codebox">' + esc(data.code) + '</pre>';
   }
 }
 
@@ -501,6 +525,11 @@ async function dbgInit() {
   if ((d.load_errors || []).length) {
     toast('有 ' + d.load_errors.length + ' 个检查模块自身加载失败，将在执行时呈现', false);
   }
+  try {
+    const f = await api('/api/debug/functions');
+    if (f.ok) DBG_FUNCS = f.files || [];
+  } catch (e) { /* 目录加载失败不影响检查项 */ }
+  dbgBuildFuncIndex();
   dbgRender();
   dbgRenderToolTabs();
   dbgRenderToolForm();
@@ -527,6 +556,19 @@ async function dbgInit() {
   });
   document.querySelectorAll('.ttab').forEach(b =>
     b.addEventListener('click', () => dbgShowView(b.dataset.view)));
+  document.querySelector('main').addEventListener('click', (e) => {
+    const cell = e.target.closest('.file-cell');
+    if (!cell) return;
+    const text = cell.dataset.copy;
+    (navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject()).then(
+      () => toast('已复制：' + text),
+      () => {
+        const ta = document.createElement('textarea');
+        ta.value = text; document.body.appendChild(ta); ta.select();
+        document.execCommand('copy'); ta.remove();
+        toast('已复制：' + text);
+      });
+  });
   $('#toolTabs').addEventListener('click', (e) => {
     const b = e.target.closest('.ttab2');
     if (!b) return;

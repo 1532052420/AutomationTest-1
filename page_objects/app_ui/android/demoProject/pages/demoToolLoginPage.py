@@ -27,12 +27,18 @@ class DemoToolLoginPage:
         self.appOperator.sendText(self._elements.et_code, text)
 
     def assert_toast(self, text):
-        """断言toast"""
-        assert self.appOperator.is_toast_visible(text, wait_seconds=5), '断言toast「%s」' % text
+        """断言toast（成败截图均入 allure）"""
+        ok = self.appOperator.is_toast_visible(text, wait_seconds=5)
+        self.appOperator.assert_true_with_shot('断言toast「%s」' % text, ok, '未捕获到「%s」toast' % text)
 
     def assert_login_layer(self):
         """断言登录弹层已出现（手机登录入口可见）——新旧版本通用：旧版弹层前有'请先登录'toast，新版直接弹层"""
-        self.appOperator.getElement(self._elements.btn_phone_login)
+        ok = True
+        try:
+            self.appOperator.getElement(self._elements.btn_phone_login)
+        except Exception:
+            ok = False
+        self.appOperator.assert_true_with_shot('断言登录弹层出现', ok, '未找到手机号登录入口')
 
     def click_agree_protocol(self):
         """勾选我已阅读并同意"""

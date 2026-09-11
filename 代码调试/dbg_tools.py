@@ -1,14 +1,11 @@
 # -*- coding: utf-8 -*-
-"""代码调试 · 交互式调试工具（真实可输入：用户填参数 → 执行 → 返回数据）
+"""代码调试 · 新增 PO 生成器（用户输入类名与元素定义 → 生成框架风格代码 → 可保存入库）
 
-与 dbg_checks_* 的"固定检查项"不同，本模块的每个工具接受用户输入参数：
-- http_request   真实发起 HTTP 请求（走框架 DoRequest），返回状态码/响应头/响应体
-- text_assert    文本 + 正则匹配调试，返回匹配结果与各断言工具判定
-- element_build  构造 ElementInfo（定位方式/定位值/等待），返回元素数据 JSON
+框架已有方法的调试不在这里——dbg_functions.py 的方法调试引擎直接反射并真实调用
+框架全部公开方法（DoRequest.get、AssertTool.isRegularMatch、CreateElement.create 等）。
+本模块只负责「新增 PO」这一代码生成能力：
 - po_generate    生成「页面对象 + 元素仓库」框架代码（风格对齐 kuaigeLoginPage 体系）
 - po_save        把生成的代码写入 page_objects 对应目录（存在时需确认覆盖）
-
-所有工具只读或写入 page_objects 指定目录，不触碰其他框架文件。
 """
 import os
 import re
@@ -24,121 +21,6 @@ ELEMENTS_DIR = os.path.join(ROOT, 'page_objects', 'app_ui', 'android', 'demoProj
 
 class ToolError(Exception):
     """用户输入不合法（返回给页面展示，不算系统异常）"""
-
-
-# ---------------------------------------------------------------- 工具 1：HTTP 请求
-def tool_http_request(params):
-    from urllib.parse import urlparse
-    from common.httpclient.doRequest import DoRequest
-    url = str(params.get('url') or '').strip()
-    if not re.match(r'^https?://', url):
-        raise ToolError('URL 必须以 http:// 或 https:// 开头')
-    method = str(params.get('method') or 'get').lower()
-    if method not in ('get', 'post_form', 'put'):
-        raise ToolError('method 仅支持 get / post_form / put')
-    parsed = urlparse(url)
-    base = '%s://%s' % (parsed.scheme, parsed.netloc)
-    path = parsed.path or '/'
-    if parsed.query:
-        path += '?' + parsed.query
-    params_dict = params.get('params') or {}
-    headers = params.get('headers') or {}
-    timeout = min(max(int(params.get('timeout') or 20), 1), 45)
-    client = DoRequest(base, timeout=timeout)
-    try:
-        if headers:
-            client.setHeaders({str(k): str(v) for k, v in headers.items()})
-        if method == 'get':
-            r = client.get(path, params_dict or None)
-        elif method == 'post_form':
-            r = client.post_with_form(path, params_dict or None)
-        else:
-            r = client.put(path, params_dict or None)
-        body = (r.body or '')
-        return {
-            'status_code': r.status_code,
-            'cookies': r.cookies,
-            'body': body[:4000] + ('…(截断，共 %d 字符)' % len(body) if len(body) > 4000 else ''),
-            'body_length': len(body),
-            'request': {'base': base, 'path': path, 'method': method, 'params': params_dict, 'headers': headers},
-        }
-    finally:
-        client.closeSession()
-
-
-# ---------------------------------------------------------------- 工具 2：文本断言
-def tool_text_assert(params):
-    import re as _re
-    from common.assertTool import AssertTool
-    from common.hamcrest.hamcrest import assert_that
-    source = str(params.get('source') or '')
-    pattern = str(params.get('pattern') or '').strip()
-    if not pattern:
-        raise ToolError('正则表达式不能为空')
-    try:
-        compiled = _re.compile(pattern)
-    except _re.error as e:
-        raise ToolError('正则不合法: %s' % e)
-    matches = [m.group(0) for m in compiled.finditer(source)]
-    first = compiled.search(source)
-    # 框架两套断言工具的判定结果
-    try:
-        assert_tool_ok = bool(AssertTool.isRegularMatch(source, pattern))
-    except Exception as e:
-        assert_tool_ok = '工具异常: %s' % e
-    try:
-        assert_that(source).is_match_by_regexp(pattern)
-        hamcrest_ok = True
-    except AssertionError:
-        hamcrest_ok = False
-    return {
-        'matched': first is not None,
-        'match_text': first.group(0) if first else None,
-        'groups': list(first.groups()) if first else [],
-        'all_matches': matches[:50],
-        'match_count': len(matches),
-        'assertTool_isRegularMatch': assert_tool_ok,
-        'hamcrest_is_match_by_regexp': hamcrest_ok,
-    }
-
-
-# ---------------------------------------------------------------- 工具 3：元素构造
-def tool_element_build(params):
-    from page_objects.createElement import CreateElement
-    from page_objects.app_ui.locator_type import Locator_Type
-    from page_objects.app_ui.wait_type import Wait_Type
-    locator_type = str(params.get('locator_type') or '').strip()
-    if not hasattr(Locator_Type, locator_type):
-        valid = [a for a in dir(Locator_Type) if not a.startswith('_')]
-        raise ToolError('locator_type 不合法，可选: %s' % ', '.join(valid))
-    locator_value = str(params.get('locator_value') or '').strip()
-    if not locator_value:
-        raise ToolError('locator_value 不能为空')
-    wait_type = str(params.get('wait_type') or '').strip()
-    kwargs = {}
-    if wait_type:
-        if wait_type not in [a for a in dir(Wait_Type) if not a.startswith('_')]:
-            valid = [a for a in dir(Wait_Type) if not a.startswith('_')]
-            raise ToolError('wait_type 不合法，可选: %s' % ', '.join(valid))
-        kwargs['wait_type'] = getattr(Wait_Type, wait_type)
-        if params.get('wait_seconds'):
-            kwargs['wait_seconds'] = int(params['wait_seconds'])
-    if params.get('expected_value'):
-        kwargs['expected_value'] = str(params['expected_value'])
-    info = CreateElement.create(getattr(Locator_Type, locator_type), locator_value, **kwargs)
-    code_line = "CreateElement.create(Locator_Type.%s, '%s'" % (locator_type, locator_value)
-    if wait_type:
-        code_line += ", wait_type=Wait_By.%s" % wait_type
-    code_line += ")"
-    return {
-        'locator_type': info.locator_type,
-        'locator_value': info.locator_value,
-        'expected_value': info.expected_value,
-        'wait_type': info.wait_type,
-        'wait_expected_value': info.wait_expected_value,
-        'wait_seconds': info.wait_seconds,
-        'code': code_line,
-    }
 
 
 # ---------------------------------------------------------------- 工具 4/5：新增 PO
@@ -285,9 +167,6 @@ def tool_po_save(params):
 
 
 TOOLS = {
-    'http_request': tool_http_request,
-    'text_assert': tool_text_assert,
-    'element_build': tool_element_build,
     'po_generate': tool_po_generate,
     'po_save': tool_po_save,
 }

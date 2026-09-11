@@ -1,7 +1,9 @@
 # -*- coding: utf-8 -*-
-"""代码调试 · 交互式工具运行器（子进程入口，平台通过 stdin 传入参数）
+"""代码调试 · 运行器（子进程入口，平台通过 stdin 传入参数）
 
-输入（stdin JSON）: {"tool": "http_request", "params": {...}}
+输入（stdin JSON）:
+  {"tool": "__call__", "params": {"target": "模块::类.方法", "ctor_args": {...}, "args": {...}}}  → 方法调试
+  {"tool": "po_generate" | "po_save", "params": {...}}                                          → 新增 PO
 输出: 人类可读行 + 最后一行协议标记 __DBG_TOOL__{json}
 """
 import json
@@ -20,14 +22,23 @@ def main():
     payload = json.loads(sys.stdin.read() or '{}')
     tool = payload.get('tool')
     params = payload.get('params') or {}
-    from dbg_tools import TOOLS, ToolError
+    from dbg_functions import CallError
+    from dbg_tools import ToolError
     try:
-        if tool not in TOOLS:
-            raise ToolError('未知工具: %s' % tool)
-        data = TOOLS[tool](params)
-        result = {'ok': True, 'data': data}
-        print('[OK] %s' % tool)
-    except ToolError as e:
+        if tool == '__call__':
+            from dbg_functions import call_function
+            data = call_function(params.get('target'),
+                                 params.get('ctor_args') or {}, params.get('args') or {})
+            result = {'ok': True, 'data': data}
+            print('[OK] call %s' % params.get('target'))
+        else:
+            from dbg_tools import TOOLS
+            if tool not in TOOLS:
+                raise ToolError('未知工具: %s' % tool)
+            data = TOOLS[tool](params)
+            result = {'ok': True, 'data': data}
+            print('[OK] %s' % tool)
+    except (ToolError, CallError) as e:
         result = {'ok': False, 'msg': str(e)}
         print('[输入错误] %s' % e)
     except Exception as e:

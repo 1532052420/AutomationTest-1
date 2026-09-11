@@ -31,6 +31,30 @@ MARK_TOOL = '__DBG_TOOL__'
 RUN_TIMEOUT_SECONDS = 360
 # 交互工具单次上限（HTTP 请求内部最长 45s）
 TOOL_TIMEOUT_SECONDS = 90
+# 框架方法目录扫描（每次强制重扫：新增/删除文件即时反映；方法签名修改需重启平台刷新）
+_FUNCS_CACHE = {'scan': None}
+
+
+def _load_dbg_module(name):
+    """按文件路径加载 代码调试/<name>.py（目录名为中文，不走包导入）"""
+    import importlib.util
+    path = os.path.join(DBG_DIR, name + '.py')
+    spec = importlib.util.spec_from_file_location('dbg_%s_%d' % (name, id(request)), path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+@bp.route('/api/debug/functions')
+def api_debug_functions():
+    """框架方法目录（自动识别）：扫描框架全部文件，反射出类/方法/参数签名。
+    新增或删除框架文件后，此处清单自动增减。"""
+    mod = _load_dbg_module('dbg_functions')
+    files = mod.scan_functions(force=True)
+    total_methods = sum(len(f['entries']) for f in files)
+    err_files = [f['file'] for f in files if f.get('error')]
+    return jsonify({'ok': True, 'files': files, 'total_methods': total_methods,
+                    'total_files': len(files), 'error_files': err_files})
 
 # ---------------- 代码审查记录（每次「全部验证」保存一份快照，分页查询） ----------------
 _RECORDS_PATH = os.environ.get('DEBUG_RECORDS_PATH') or os.path.join(

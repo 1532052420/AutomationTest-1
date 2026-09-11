@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>执行详情 · AppUI 自动化测试平台</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body data-page="detail" data-run-id="{{ run_id }}">
+<div class="sidebar" id="sidebar"></div>
+<main>
+  <div class="pagehead">
+    <h1 id="detailTitle">用例执行记录 · {{ run_id }}</h1>
+    <span class="sub"><a class="runlink" href="/report">← 返回测试报告</a></span>
+  </div>
+  <div id="detailBody">加载中…</div>
+</main>
+<div id="toast"></div>
+<div class="mask" id="mask">
+  <div class="modal">
+    <h4 id="mTitle"></h4>
+    <p id="mMsg"></p>
+    <div class="mops"><button class="ghost" id="mCancel">取消</button><button id="mOk">确定</button></div>
+  </div>
+</div>
+<script src="/static/app.js"></script>
+</body>
+</html>

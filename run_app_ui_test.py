@@ -16,6 +16,7 @@ import argparse
 import multiprocessing
 import os
 import pytest
+import shutil
 import sys
 import ujson
 
@@ -55,7 +56,12 @@ def start_app_device_test(index,device_info,keyword,dir,markexpr,capture,reruns,
             desired_capabilities_desc = desired_capabilities['bundleId']
         print('%s当前设备开始测试的desired_capabilities为:%s'%(DateTimeTool.getNowTime(),desired_capabilities))
         # 执行pytest前的参数准备
-        pytest_execute_params = ['-c', 'config/pytest.ini', '-v', '--alluredir', 'output/app_ui/%s/%s/report_data/'%(device_info['device_desc'],desired_capabilities_desc)]
+        report_data_dir = 'output/app_ui/%s/%s/report_data/'%(device_info['device_desc'],desired_capabilities_desc)
+        # 每次执行前清空 report_data，避免历史结果混入本次 Allure 报告
+        if os.path.isdir(report_data_dir):
+            shutil.rmtree(report_data_dir, ignore_errors=True)
+        os.makedirs(report_data_dir, exist_ok=True)
+        pytest_execute_params = ['-c', 'config/pytest.ini', '-v', '--alluredir', report_data_dir]
         # 判断目录参数
         if not dir:
             dir = 'cases/app_ui/'

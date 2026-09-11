@@ -58,4 +58,5 @@ class Read_APP_UI_Devices_Info(object):
         devices_info.noSigns = get_lambda(config.get('devices_info','noSigns',fallback=''))
         devices_info.fullResets = get_lambda(config.get('devices_info', 'fullResets', fallback=''))
         devices_info.noResets = get_lambda(config.get('devices_info', 'noResets', fallback=''))
+        devices_info.waitForIdleTimeouts = get_lambda(config.get('devices_info', 'waitForIdleTimeouts', fallback=''))
         return devices_info.get_devices_info()

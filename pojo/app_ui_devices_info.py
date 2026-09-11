@@ -32,6 +32,7 @@ class APP_UI_Devices_Info:
         self.noSigns = []
         self.fullResets = []
         self.noResets = []
+        self.waitForIdleTimeouts = []
 
     def get_devices_info(self):
         devices_info = []
@@ -95,7 +96,11 @@ class APP_UI_Devices_Info:
                     if 'true' == self.nativeWebScreenshots[i].strip().lower():
                         nativeWebScreenshot=True
                     desired_capabilities.update({'nativeWebScreenshot':nativeWebScreenshot})
-                desired_capabilities.update({'systemport': self.systemports[i].strip()})
+                desired_capabilities.update({'systemPort': self.systemports[i].strip()})
+                # Appium3/W3C 下键名为 systemPort(驼峰)；不再 skipServerInstallation——
+                # 跳过安装会掩盖设备端 uiautomator2 server 进程重启后的 session 丢失(报 session not known)，
+                # 让 driver 每次建 session 自行校验/重启设备端 server 更稳
+                desired_capabilities.update({'newCommandTimeout': 300})
                 if len(self.wdaLocalPorts):
                     desired_capabilities.update({'wdaLocalPort': self.wdaLocalPorts[i].strip()})
                 if len(self.appActivitys) and len(self.appPackages):
@@ -120,6 +125,18 @@ class APP_UI_Devices_Info:
                     if 'true' == self.noResets[i].strip().lower():
                         noReset = True
                     desired_capabilities.update({'noReset': noReset})
+                # UiAutomator2：缩短每次操作前的 UI idle 等待。
+                # 快歌等含持续动画的 App 会让 ui 永远等不到 idle，默认 idle 超时(10s)导致每条命令卡 10~60s，
+                # 点击"立即登录"后 toast 生命周期只有 2~3s，等命令返回 toast 已消失 → toast 断言必失败。
+                # 默认 800ms，conf 字段 waitForIdleTimeouts 可覆盖。
+                if len(self.automationNames) and 'uiautomator2' == self.automationNames[i].strip().lower():
+                    wait_for_idle_timeout = 800
+                    if len(self.waitForIdleTimeouts):
+                        try:
+                            wait_for_idle_timeout = int(self.waitForIdleTimeouts[i].strip())
+                        except (ValueError, IndexError):
+                            pass
+                    desired_capabilities.update({'appium:waitForIdleTimeout': wait_for_idle_timeout})
                 a_devices_desired_capabilities.append(desired_capabilities)
             device_info.update({'capabilities': a_devices_desired_capabilities})
             # 完成一台设备构建

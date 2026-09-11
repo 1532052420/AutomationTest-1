@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>测试报告 · AppUI 自动化测试平台</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body data-page="report">
+<div class="sidebar" id="sidebar"></div>
+<main>
+  <div class="pagehead">
+    <h1>📈 测试报告</h1>
+    <span class="sub">按 run 独立的 Allure 报告，历史互不覆盖</span>
+    <div class="actions"><button class="danger" id="btnClearAll3">🗑 清空全部数据</button></div>
+  </div>
+  <div class="card">
+    <h3>报告列表</h3>
+    <p class="muted" style="margin-bottom:12px">「详情」= 查看该次执行的用例执行记录（用例/步骤/断言截图）与执行日志；「打开报告」= 生成并以 allure 起本地报告服务；「删除数据」= 删除该 run 的全部数据。</p>
+    <div class="tblwrap">
+      <table>
+        <thead><tr><th>Run ID</th><th>时间</th><th>状态</th><th>Allure 数据</th><th>报告</th><th>操作</th></tr></thead>
+        <tbody id="reportList"></tbody>
+      </table>
+    </div>
+    <div class="pager" id="reportPager"></div>
+  </div>
+  <div class="card mt">
+    <div class="cardhead"><h3>用例执行记录</h3><span class="sub">点上方 run 的「详情」加载该次执行的用例、步骤、断言通过/失败截图与执行日志</span></div>
+    <div id="runDetail"><div class="empty"><span class="eico">👈</span>从上方列表选择一条执行记录查看详情</div></div>
+  </div>
+</main>
+<div id="toast"></div>
+<div class="mask" id="mask">
+  <div class="modal">
+    <h4 id="mTitle"></h4>
+    <p id="mMsg"></p>
+    <div class="mops"><button class="ghost" id="mCancel">取消</button><button id="mOk">确定</button></div>
+  </div>
+</div>
+<script src="/static/app.js"></script>
+</body>
+</html>

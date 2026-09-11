@@ -41,10 +41,8 @@ class APP_UI_Android_demoProject_Client(object):
             # appium启动是非重置或者非第一次appium启动，则要进行重置
             if self.__is_first==False or self.noReset==True:
                 self.appOperator.reset_app()
-        elif is_need_kill_app:
-            # appium启动是非重置或者非第一次appium启动，则要进行重启进程
-            if self.__is_first==False or self.noReset==True:
-                self.appOperator.start_activity('com.moji.mjweather','com.moji.mjweather.MainActivity')
+        # 注：is_need_kill_app 分支原用于启动演示项目墨迹天气，已随墨迹天气清理移除；
+        # 被测 App 统一在用例 setup_class 中显式 start_activity 启动
     
         self.__is_first=False
 

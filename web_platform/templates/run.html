@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>执行 · AppUI 自动化测试平台</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body data-page="run">
+<div class="sidebar" id="sidebar"></div>
+<main>
+  <div class="pagehead">
+    <h1>🚀 执行用例</h1>
+    <span class="sub">选配置 → 勾用例 → 开始执行（设备与 Appium 状态见右侧栏）</span>
+  </div>
+
+  <div class="card">
+    <h3>执行配置</h3>
+    <div class="devgrid" id="devState" style="margin-bottom:14px">加载中…</div>
+    <div class="mt">
+      <div class="field" style="max-width:520px;margin-bottom:14px">
+        <label>默认配置来源（conf，选中即按它填充下方参数，也可手动修改）</label>
+        <select id="confSel"></select>
+      </div>
+      <div class="fields">
+        <div class="field"><label>设备编号（udid）</label><input type="text" id="inUdid" placeholder="自动填充当前设备"></div>
+        <div class="field"><label>应用包名（appPackage）</label><input type="text" id="inPackage" placeholder="如 com.recordlife.kuaige"></div>
+        <div class="field"><label>启动 Activity</label><input type="text" id="inActivity" placeholder="如 com.recordlife.kuaige.feature.main.MainActivity"></div>
+      </div>
+      <p class="muted mt">以上参数仅对本次执行生效（不写回 conf 文件）；留空 = 用默认值。</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>选择用例（cases/app_ui）</h3>
+    <div style="display:flex;gap:10px;margin-bottom:12px">
+      <button class="ghost mini" id="btnSelectAll">全选</button>
+      <button class="ghost mini" id="btnSelectNone">全不选</button>
+      <button id="btnStart">🚀 开始执行</button>
+    </div>
+    <div class="tree" id="caseTree">加载中…</div>
+  </div>
+
+  <div class="card" id="execArea" style="display:none">
+    <h3>执行中</h3>
+    <div class="meta">
+      <span>Run <b id="runIdNow">-</b></span>
+      <span>状态 <span id="runStatusNow">-</span></span>
+      <span><b id="runStatsNow">-</b></span>
+      <span style="margin-left:auto"><button class="danger mini" id="btnStop">⏹ 停止执行</button>
+      <button class="ghost mini" id="btnGoDetail">查看详情</button></span>
+    </div>
+    <div class="bar mt"><i id="runProgress"></i></div>
+    <div class="logbox mt" id="logBox"></div>
+  </div>
+</main>
+<div id="toast"></div>
+<div class="mask" id="mask">
+  <div class="modal">
+    <h4 id="mTitle"></h4>
+    <p id="mMsg"></p>
+    <div class="mops"><button class="ghost" id="mCancel">取消</button><button id="mOk">确定</button></div>
+  </div>
+</div>
+<script src="/static/app.js"></script>
+</body>
+</html>

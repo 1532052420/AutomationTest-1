@@ -14,3 +14,11 @@
 *packages*
 *.vscode*
 *ychtest.py*
+.venv/
+node_modules/
+package.json
+package-lock.json
+# macOS/工具产物
+.DS_Store
+.zcode/
+gui-test-screenshots/

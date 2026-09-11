@@ -716,6 +716,13 @@ class AppOperator:
         """
         self._driver.hide_keyboard(key_name,key,strategy)
 
+    def is_keyboard_shown(self):
+        """
+        查询键盘是否可见(仅App可用)
+        :return:
+        """
+        return self._driver.is_keyboard_shown()
+
     def toggle_airplane_mode(self):
         """
         切换飞行模式(开启关闭),仅支持Android

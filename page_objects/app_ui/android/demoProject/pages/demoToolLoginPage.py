@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 # 工具生成·手机号登录流程执行验证
+import time
+
 from page_objects.app_ui.android.demoProject.elements.kuaigeLoginElements import KuaigeLoginElements
 
 
@@ -9,6 +11,40 @@ class DemoToolLoginPage:
     def __init__(self, appOperator):
         self.appOperator = appOperator
         self._elements = KuaigeLoginElements()
+
+    def deal_first_launch_dialogs(self):
+        """首次启动一次性弹窗处理：隐私协议「同意并继续」→ 系统权限「允许」。
+
+        teardown 的 reset_app 会清应用数据，每次首启都会遇到弹窗；
+        元素等待仅 2s，无弹窗时快速跳过，不影响正常流程。
+        """
+        for element, desc in ((self._elements.btn_agree_privacy, '隐私协议弹窗'),
+                              (self._elements.btn_system_allow, '系统权限弹窗')):
+            try:
+                self.appOperator.click(element)
+                time.sleep(1)  # 等弹窗收尾动画，避免点击落到下层页面
+            except Exception:
+                pass  # 该弹窗未出现，跳过
+
+    def dismiss_ime_panel(self):
+        """收起键盘/vivo 键盘「键盘选择」面板，避免其遮挡登录按钮。
+
+        Appium 输入文本时切换输入法，vivo 键盘会弹布局选择面板盖住表单；
+        仅在键盘可见或面板存在时按一次 BACK，否则不动（防止误触返回导航退出登录页）。
+        """
+        keyboard_shown = False
+        try:
+            keyboard_shown = bool(self.appOperator.is_keyboard_shown())
+        except Exception:
+            pass
+        panel_visible = True
+        try:
+            self.appOperator.getElement(self._elements.panel_ime_chooser)
+        except Exception:
+            panel_visible = False
+        if keyboard_shown or panel_visible:
+            self.appOperator.press_keycode(4)  # BACK
+            time.sleep(0.5)
 
     def tap_xy(self, x, y):
         """点任意位置触发登录弹层"""

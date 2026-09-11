@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # 工具生成·手机号登录流程执行验证
 # 流程：
+# 0. 首次启动弹窗处理（隐私协议/系统权限，无弹窗自动跳过）
 # 1. 点任意位置触发登录弹层
 # 2. 断言登录弹层出现（新旧版本通用）
 # 3. 点击手机号登录入口
@@ -29,6 +30,9 @@ class TestDemoToolLogin:
     def test_phone_login_flow(self):
         page = self.page
 
+        # 0. 首次启动弹窗处理（隐私协议/系统权限，无弹窗自动跳过）
+        page.deal_first_launch_dialogs()
+
         # 1. 点任意位置触发登录弹层（真机 720x1536 坐标；模拟器 1080x2280 为 540,1500）
         page.tap_xy(360, 768)
 
@@ -43,6 +47,9 @@ class TestDemoToolLogin:
 
         # 5. 输入验证码
         page.input_et_code('8888')
+
+        # 5.5 收起键盘/输入法面板（vivo 键盘布局选择器会遮挡登录按钮）
+        page.dismiss_ime_panel()
 
         # 6. 点击立即登录（未勾选协议）
         page.click_btn_login()

@@ -34,7 +34,8 @@ def start_app_device_test(index,device_info,keyword,dir,markexpr,capture,reruns,
         doRquest = DoRequest('http://'+device_info['server_ip']+':%s/wd/hub'%device_info['server_port'].strip())
         httpResponseResult = doRquest.get('/status')
         result = ujson.loads(httpResponseResult.body)
-        if result['status'] == 0:
+        # Appium 1.x 返回顶层 status=0；Appium 2+/3+ W3C 返回 value.ready=true，两种都认可
+        if result.get('status') == 0 or (result.get('value') or {}).get('ready') is True:
             print('%sappium server状态为可用......'%DateTimeTool.getNowTime())
         else:
             sys.exit('%sappium server状态为不可用'%DateTimeTool.getNowTime())

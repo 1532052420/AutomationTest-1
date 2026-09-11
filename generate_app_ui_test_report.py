@@ -70,11 +70,14 @@ if __name__ == '__main__':
 
         for i in range(len(report_dirs)):
             port = str(int(start_port) + i)
-            # 获得当前监听port端口的进程id
-            get_port_process_ids_command = "netstat -anp|grep -i " + port + "|grep -v grep|awk '{print $7}'|awk -F '/' '{print $1}'"
-            port_process_ids = subprocess.check_output(get_port_process_ids_command, shell=True)
-            port_process_ids = port_process_ids.decode('utf-8')
-            port_process_ids = port_process_ids.split('\n')
+            # 获得当前监听port端口的进程id（netstat -anp 为 Linux 语法，macOS 无 -p 选项，查不到按无残留进程处理）
+            get_port_process_ids_command = "netstat -anp 2>/dev/null|grep -i " + port + "|grep -v grep|awk '{print $7}'|awk -F '/' '{print $1}'"
+            try:
+                port_process_ids = subprocess.check_output(get_port_process_ids_command, shell=True)
+                port_process_ids = port_process_ids.decode('utf-8')
+                port_process_ids = port_process_ids.split('\n')
+            except subprocess.CalledProcessError:
+                port_process_ids = []
             is_find = False
             for port_process_id in port_process_ids:
                 if is_find:

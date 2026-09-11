@@ -48,8 +48,10 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
 
 
 @pytest.fixture(scope='session')
-def platform():
-    env = dict(os.environ, WEB_PLATFORM_PORT=str(PORT), PYTHONIOENCODING='utf-8')
+def platform(tmp_path_factory):
+    rec_path = tmp_path_factory.mktemp('dbg_records') / 'records.json'
+    env = dict(os.environ, WEB_PLATFORM_PORT=str(PORT), PYTHONIOENCODING='utf-8',
+               DEBUG_RECORDS_PATH=str(rec_path))
     proc = subprocess.Popen([sys.executable, os.path.join('web_platform', 'app.py')],
                             cwd=ROOT, env=env,
                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -287,3 +289,60 @@ def test_run_sh_no_dead_branch():
     content = open(os.path.join(ROOT, 'run.sh'), encoding='utf-8').read()
     assert 'run_web_ui_test' not in content
     subprocess.run(['bash', '-n', os.path.join(ROOT, 'run.sh')], check=True)
+
+
+# ---------------------------------------------------------------- 审查记录
+def _make_results(passed=38, failed=2, skipped=2):
+    results = []
+    n = 0
+    for status, count in (('PASS', passed), ('FAIL', failed), ('SKIP', skipped)):
+        for _ in range(count):
+            results.append({'id': 'case.%03d' % n, 'file': 'x.py', 'title': 't',
+                            'status': status, 'detail': '', 'error': None, 'duration_ms': 1})
+            n += 1
+    return results
+
+
+def test_debug_records_save_and_list(platform):
+    for i in range(3):
+        code, body, _ = http('POST', '/api/debug/records',
+                             {'results': _make_results(passed=30 + i), 'duration_ms': 1000 + i})
+        assert code == 200 and json.loads(body)['ok']
+    code, body, _ = http('GET', '/api/debug/records')
+    d = json.loads(body)
+    assert d['ok'] and d['total'] == 3 and d['pages'] == 1
+    newest = d['records'][0]
+    assert newest['summary']['passed'] == 32, '应按时间倒序（最新在前）'
+    assert 'results' not in newest, '列表载荷不应携带明细'
+
+
+def test_debug_records_pagination(platform):
+    for i in range(12):
+        http('POST', '/api/debug/records', {'results': _make_results(), 'duration_ms': i})
+    code, body, _ = http('GET', '/api/debug/records')
+    d = json.loads(body)
+    assert d['total'] == 15 and d['pages'] == 2 and len(d['records']) == 10
+    code, body, _ = http('GET', '/api/debug/records?page=2')
+    d2 = json.loads(body)
+    assert len(d2['records']) == 5 and d2['page'] == 2
+
+
+def test_debug_records_detail_and_delete(platform):
+    code, body, _ = http('POST', '/api/debug/records', {'results': _make_results()})
+    rid = json.loads(body)['record_id']
+    code, body, _ = http('GET', '/api/debug/records/%s' % rid)
+    rec = json.loads(body)['record']
+    assert len(rec['results']) == 42 and rec['summary']['failed'] == 2
+    code, body, _ = http('DELETE', '/api/debug/records/%s' % rid)
+    assert code == 200 and json.loads(body)['ok']
+    code, body, _ = http('GET', '/api/debug/records/%s' % rid)
+    assert code == 404
+
+
+def test_debug_records_validation(platform):
+    code, body, _ = http('POST', '/api/debug/records', {'results': []})
+    assert code == 400
+    code, body, _ = http('GET', '/api/debug/records/bad..id')
+    assert code == 400
+    code, body, _ = http('GET', '/api/debug/records/no_such_id')
+    assert code == 404

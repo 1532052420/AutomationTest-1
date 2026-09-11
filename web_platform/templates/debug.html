@@ -11,7 +11,7 @@
 <main>
   <div class="pagehead">
     <h1>🧪 代码审查</h1>
-    <span class="sub" id="subTitle">框架接口 / 方法调用逐项调试与验证（按文件分类）</span>
+    <span class="sub" id="subTitle">框架接口 / 方法调用逐项调试与验证（按文件分组 · 点统计卡筛选 · 每次全部验证自动存记录）</span>
     <div class="actions">
       <button class="ghost" id="btnReload">⟳ 刷新清单</button>
       <button id="btnRunAll">▶ 全部验证</button>
@@ -20,14 +20,35 @@
 
   <div class="stats">
     <div class="stat s-blue"><span class="bgico">📦</span><div class="num" id="stTotal">—</div><div class="label">调试项 / 文件</div></div>
-    <div class="stat s-green"><span class="bgico">✅</span><div class="num" id="stPass">—</div><div class="label">通过</div></div>
-    <div class="stat s-red"><span class="bgico">❌</span><div class="num" id="stFail">—</div><div class="label">失败 / 异常</div></div>
-    <div class="stat s-slate"><span class="bgico">⏭</span><div class="num" id="stSkip">—</div><div class="label">跳过（环境未就绪）</div></div>
+    <div class="stat s-green clickable" title="点击只看「通过」项，再点一次取消"><span class="bgico">✅</span><div class="num" id="stPass">—</div><div class="label">通过 ▾筛选</div></div>
+    <div class="stat s-red clickable" title="点击只看「失败/异常」项，再点一次取消"><span class="bgico">❌</span><div class="num" id="stFail">—</div><div class="label">失败 / 异常 ▾筛选</div></div>
+    <div class="stat s-slate clickable" title="点击只看「跳过」项，再点一次取消"><span class="bgico">⏭</span><div class="num" id="stSkip">—</div><div class="label">跳过 ▾筛选</div></div>
   </div>
+  <p class="muted" id="filterTip" style="display:none;margin:-10px 0 12px">当前筛选：<b id="filterTipText"></b>（再点同一统计卡取消筛选）</p>
 
+  <div id="viewBanner" class="card viewbanner" style="display:none"></div>
+  <div id="fileChips" class="chips"></div>
   <div id="dbgList"><div class="card"><h3>加载中…</h3></div></div>
+
+  <div class="card">
+    <div class="cardhead"><h3>🗂 代码审查记录 <span class="muted" id="recCount"></span></h3></div>
+    <div class="tblwrap">
+      <table>
+        <thead><tr><th>记录 ID</th><th>时间</th><th>结果</th><th>总耗时</th><th>操作</th></tr></thead>
+        <tbody id="recList"></tbody>
+      </table>
+    </div>
+    <div class="pager" id="recPager"></div>
+  </div>
 </main>
 <div id="toast"></div>
+<div class="mask" id="mask">
+  <div class="modal">
+    <h4 id="mTitle"></h4>
+    <p id="mMsg"></p>
+    <div class="mops"><button class="ghost" id="mCancel">取消</button><button id="mOk">确定</button></div>
+  </div>
+</div>
 <script src="/static/app.js"></script>
 <script src="/static/debug.js"></script>
 </body>

@@ -53,6 +53,8 @@ class ExecutionManager(object):
     def __init__(self):
         self._tasks = {}
         self._lock = threading.Lock()
+        # 启动锁：串行化 start_run 主体，消除"互斥检查→任务注册"窗口期的并发双任务竞态
+        self._start_lock = threading.Lock()
         self._run_seq = self._next_run_seq()
 
     # ------------------------------------------------------------------ 查询
@@ -75,13 +77,25 @@ class ExecutionManager(object):
         # 服务重启后内存态丢失，从磁盘 result.json 回退（历史任务只读）
         return self._load_disk_task(run_id)
 
+    @staticmethod
+    def _normalize_disk_task(task):
+        """磁盘历史任务归一：平台重启后进程已不存在，残留的 RUNNING/PENDING（幽灵任务）
+        归一为 ERROR 并注明原因，避免历史列表永远显示「执行中"""
+        if task.get('status') in ('PENDING', 'RUNNING'):
+            task['status'] = 'ERROR'
+            reason = '平台重启，任务中断（进程已不存在）'
+            task['error_msg'] = ((task.get('error_msg') or '') + '；' + reason).lstrip('；')
+            if not task.get('end_time'):
+                task['end_time'] = task.get('start_time')
+        return task
+
     def _load_disk_task(self, run_id):
         path = os.path.join(RUNS_DIR, run_id, 'result.json')
         if not os.path.isfile(path):
             return None
         try:
             with open(path, 'r', encoding='utf-8') as f:
-                return ujson.loads(f.read())
+                return self._normalize_disk_task(ujson.loads(f.read()))
         except Exception:
             return None
 
@@ -115,7 +129,7 @@ class ExecutionManager(object):
             if os.path.isfile(result_path):
                 try:
                     with open(result_path, 'r', encoding='utf-8') as f:
-                        tasks.append(ujson.loads(f.read()))
+                        tasks.append(self._normalize_disk_task(ujson.loads(f.read())))
                 except Exception:
                     continue
         return tasks
@@ -173,6 +187,11 @@ class ExecutionManager(object):
             return False, '请至少选择一个用例'
         if not conf_file:
             return False, '请选择设备配置文件(conf)'
+        with self._start_lock:
+            return self._start_run_locked(conf_file, case_nodes, overrides)
+
+    def _start_run_locked(self, conf_file, case_nodes, overrides):
+        """启动主体（持有 _start_lock：校验与任务注册串行，互斥检查才会命中并发请求）"""
         with self._lock:
             for t in self._tasks.values():
                 if t['status'] in ('PENDING', 'RUNNING'):
@@ -248,12 +267,12 @@ class ExecutionManager(object):
         log_path = os.path.join(log_dir, 'test_%s.log' % run_id)
 
         # 5. 写 config/app_ui_tmp/<本进程PID> 设备文件（pytest 的 os.getppid() 即本进程）
+        tmp_files = [os.path.join(APP_UI_TMP_DIR, str(os.getpid())),
+                     os.path.join(APP_UI_TMP_DIR, '%s_current_desired_capabilities' % os.getpid())]
         try:
             os.makedirs(APP_UI_TMP_DIR, exist_ok=True)
-            self._write_json(os.path.join(APP_UI_TMP_DIR, str(os.getpid())), device_info)
-            self._write_json(
-                os.path.join(APP_UI_TMP_DIR, '%s_current_desired_capabilities' % os.getpid()),
-                current_capabilities)
+            self._write_json(tmp_files[0], device_info)
+            self._write_json(tmp_files[1], current_capabilities)
         except Exception as e:
             return False, '写设备临时文件失败: %s' % e
 
@@ -277,6 +296,7 @@ class ExecutionManager(object):
             'process': None,
             'log_lines': [],
             'stop_flag': False,
+            'tmp_files': tmp_files,
             'result_path': os.path.join(run_dir, 'result.json'),
         }
         with self._lock:
@@ -385,7 +405,7 @@ class ExecutionManager(object):
             task['skipped'] += 1
 
     def _archive(self, task):
-        """把任务持久化为 result.json（供历史查询与进程重启恢复）"""
+        """把任务持久化为 result.json（供历史查询与进程重启恢复），并清理设备临时文件"""
         with self._lock:
             data = self._public_task(task)
         try:
@@ -393,6 +413,19 @@ class ExecutionManager(object):
                 f.write(ujson.dumps(data, ensure_ascii=False, indent=2))
         except Exception as e:
             print('警告: 归档 %s 失败: %s' % (task['run_id'], e))
+        self._cleanup_device_tmp_files(task)
+
+    def _cleanup_device_tmp_files(self, task):
+        """任务结束后清理本平台进程写入的设备临时文件（config/app_ui_tmp/<pid>*），
+        避免多次执行后脏文件堆积；运行中的任务不清理（pytest 子进程还要读取）"""
+        if task.get('status') in ('PENDING', 'RUNNING'):
+            return
+        for f in task.get('tmp_files') or []:
+            try:
+                if os.path.isfile(f):
+                    os.remove(f)
+            except Exception as e:
+                print('警告: 清理设备临时文件 %s 失败: %s' % (f, e))
 
     # ------------------------------------------------------------------ 停止
     def stop_run(self, run_id):

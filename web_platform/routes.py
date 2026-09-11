@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 """Web 执行平台 · 页面与 API 路由"""
+import atexit
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -27,6 +29,20 @@ PLATFORM_CFG = WebPlatformConfig()
 
 # 已启动的报告静态服务：run_id -> {'port': int, 'proc': Popen}（复用，避免重复起服务/进程泄漏）
 _report_services = {}
+
+
+@atexit.register
+def _cleanup_report_services():
+    """平台退出时终止全部报告静态服务，避免孤儿进程占用端口"""
+    for svc in _report_services.values():
+        try:
+            svc['proc'].terminate()
+        except Exception:
+            pass
+
+
+# 用例节点白名单：文件路径/类/方法（pytest nodeid），杜绝 API 直调注入任意 pytest 参数
+_NODE_RE = re.compile(r'^[A-Za-z0-9_\./:\u4e00-\u9fff-]+$')
 
 # ---------------------------------------------------------------- 页面
 @bp.route('/')
@@ -142,6 +158,10 @@ def api_start_run():
     conf_file = (data.get('conf_file') or '').strip()
     case_nodes = data.get('case_nodes') or []
     case_nodes = [c for c in case_nodes if c and str(c).strip()]
+    bad_nodes = [str(c) for c in case_nodes
+                 if str(c).startswith('-') or '..' in str(c) or not _NODE_RE.match(str(c))]
+    if bad_nodes:
+        return jsonify({'ok': False, 'msg': '用例节点不合法: %s' % bad_nodes[0]}), 400
     overrides = data.get('overrides') or {}
     ok, result = runner.manager.start_run(conf_file, case_nodes, overrides)
     if not ok:

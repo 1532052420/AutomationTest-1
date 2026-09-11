@@ -5,7 +5,6 @@
 # 用法:
 #   ./run.sh api           启动 API 接口自动化测试
 #   ./run.sh app           启动 APP(Android) 自动化测试（执行前自动检查设备依赖）
-#   ./run.sh web           启动 Web UI 自动化测试
 #   ./run.sh start-appium  启动 Appium 3.7 服务(端口4726,后台)
 #   ./run.sh stop-appium   停止 Appium 服务
 #   ./run.sh status        Appium 服务状态
@@ -39,10 +38,6 @@ case "$1" in
     ;;
   env-check)
     ./ensure_env.sh
-    ;;
-  web)
-    shift
-    .venv/bin/python run_web_ui_test.py "$@"
     ;;
   start-appium)
     # Appium 3.7.0 独立安装于 ~/appium2，driver(uiautomator2) 在 ~/.appium；需 ANDROID_HOME(本脚本头部已导出)
@@ -93,8 +88,7 @@ case "$1" in
     case "$2" in
       api)  shift 2; .venv/bin/python generate_api_test_report.py "$@" ;;
       app)  shift 2; .venv/bin/python generate_app_ui_test_report.py "$@" ;;
-      web)  shift 2; .venv/bin/python generate_web_ui_test_report.py "$@" ;;
-      *)    echo "用法: ./run.sh report api|app|web" ;;
+      *)    echo "用法: ./run.sh report api|app" ;;
     esac
     ;;
   *)

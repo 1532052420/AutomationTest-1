@@ -1,17 +1,21 @@
-/* 测试平台 · 日间/夜间模式切换（悬浮按钮，宫崎骏风日/月图标，所有页面通用）
+/* 测试平台 · 日间/夜间模式切换（悬浮按钮，Mac/iPhone 简约风日/月图标，所有页面通用）
    默认夜间（黑色居多，即原深色主题）；日间模式白色居多（html.day 变量覆盖，见 style.css）
    选择存 localStorage['platform_theme']，刷新/重开保持
-   按钮图标：日间显示月亮图（点击切夜间），夜间显示太阳图（点击切日间） */
+   按钮图标：日间显示月亮（点击切夜间），夜间显示太阳（点击切日间）；图标颜色随主题自适应 */
 (function () {
   const KEY = 'platform_theme';
-  const ICON_MOON = '/static/theme_moon.png';
-  const ICON_SUN = '/static/theme_sun.png';
+  /* SF Symbols 风格：细线太阳 / 实心月牙 */
+  const ICON_SUN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">'
+    + '<circle cx="12" cy="12" r="4.1"/>'
+    + '<path d="M12 2.8v2M12 19.2v2M2.8 12h2M19.2 12h2M5.2 5.2l1.5 1.5M17.3 17.3l1.5 1.5M18.8 5.2l-1.5 1.5M6.7 17.3l-1.5 1.5"/></svg>';
+  const ICON_MOON = '<svg viewBox="0 0 24 24" fill="currentColor">'
+    + '<path d="M20.6 14.4A8.6 8.6 0 0 1 9.6 3.4 8.6 8.6 0 1 0 20.6 14.4Z"/></svg>';
 
   function apply(mode) {
     document.documentElement.classList.toggle('day', mode === 'day');
     const fab = document.getElementById('theme-fab');
     if (fab) {
-      fab.innerHTML = '<img src="' + (mode === 'day' ? ICON_MOON : ICON_SUN) + '" alt="切换主题">';
+      fab.innerHTML = mode === 'day' ? ICON_MOON : ICON_SUN;
       fab.title = mode === 'day' ? '切换到夜间模式（黑色）' : '切换到日间模式（白色）';
     }
   }

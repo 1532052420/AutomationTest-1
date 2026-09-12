@@ -307,16 +307,22 @@ tr.auto-head td { background: var(--panel2); }
 .mtree-item:hover { background: rgba(255,255,255,.06); }
 .mtree-item.on { background: var(--accent-tint); color: var(--ink); }
 
-/* ---------- 日间/夜间模式切换（theme.js 注入悬浮按钮，宫崎骏风日/月圆形图标） ---------- */
+/* ---------- 日间/夜间模式切换（theme.js 注入悬浮按钮，Mac/iPhone 简约风图标） ---------- */
 .theme-fab {
   position: fixed; right: 18px; bottom: 18px; z-index: 1200;
-  width: 48px; height: 48px; border-radius: 50%; border: none; cursor: pointer;
-  background: transparent; padding: 0; line-height: 0;
-  filter: drop-shadow(0 3px 8px rgba(0,0,0,.3)); transition: transform .15s;
+  width: 44px; height: 44px; border-radius: 50%;
+  border: 1px solid rgba(127,127,127,.28); cursor: pointer;
+  background: rgba(127,127,127,.14); backdrop-filter: blur(8px);
+  color: #fafafa; padding: 0; line-height: 0;
+  display: flex; align-items: center; justify-content: center;
+  transition: transform .15s, background .15s;
 }
-.theme-fab:hover { transform: scale(1.1); }
-.theme-fab:active { transform: scale(.96); }
-.theme-fab img { width: 44px; height: 44px; border-radius: 50%; display: block; }
+.theme-fab:hover { transform: scale(1.08); background: rgba(127,127,127,.24); }
+.theme-fab:active { transform: scale(.95); }
+.theme-fab svg { width: 22px; height: 22px; display: block; }
+/* 图标颜色随主题自适应 */
+html.day .theme-fab { color: #374151; border-color: rgba(0,0,0,.18); background: rgba(0,0,0,.06); }
+html.day .theme-fab:hover { background: rgba(0,0,0,.12); }
 
 /* 日间模式（html.day）：白色居多，变量整体翻浅；夜间=默认深色（:root）。
    --dark（日志/代码盒背景）日间保持深色——代码区深底浅字更易读 */

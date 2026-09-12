@@ -1,4 +1,12 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
+
+/* 主题切换渐变：颜色平滑过渡不闪眼（js 在首次渲染后才加 theme-anim，避免载入时动画） */
+@media (prefers-reduced-motion: no-preference) {
+  html.theme-anim *, html.theme-anim *::before, html.theme-anim *::after {
+    transition: background-color .55s ease, color .55s ease, border-color .55s ease,
+                fill .5s ease, stroke .5s ease, box-shadow .55s ease;
+  }
+}
 body {
   font: 14px/1.5 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
   color: #222; background: #f5f6f8; height: 100vh;
@@ -305,21 +313,30 @@ main { flex: 1; display: flex; gap: 10px; padding: 10px 12px; min-height: 0; }
 }
 .steps-head .help-icon { vertical-align: 2px; }
 
-/* ---------- 日间/夜间模式切换（index.js 注入悬浮按钮，宫崎骏风日/月圆形图标） ---------- */
+/* ---------- 日间/夜间模式切换（index.js 注入悬浮按钮，Mac/iPhone 简约风图标） ---------- */
 .theme-fab {
   position: fixed; right: 18px; bottom: 18px; z-index: 1200;
-  width: 48px; height: 48px; border-radius: 50%; border: none; cursor: pointer;
-  background: transparent; padding: 0; line-height: 0;
-  filter: drop-shadow(0 3px 8px rgba(0,0,0,.3)); transition: transform .15s;
+  width: 44px; height: 44px; border-radius: 50%;
+  border: 1px solid rgba(127,127,127,.28); cursor: pointer;
+  background: rgba(127,127,127,.14); backdrop-filter: blur(8px);
+  color: #374151; padding: 0; line-height: 0;
+  display: flex; align-items: center; justify-content: center;
+  transition: transform .15s, background .15s;
 }
-.theme-fab:hover { transform: scale(1.1); }
-.theme-fab:active { transform: scale(.96); }
-.theme-fab img { width: 44px; height: 44px; border-radius: 50%; display: block; }
+.theme-fab:hover { transform: scale(1.08); background: rgba(127,127,127,.24); }
+.theme-fab:active { transform: scale(.95); }
+.theme-fab svg { width: 22px; height: 22px; display: block; }
+/* 图标颜色随主题自适应 */
+html.night .theme-fab { color: #f3f4f6; border-color: rgba(255,255,255,.22); background: rgba(255,255,255,.08); }
+html.night .theme-fab:hover { background: rgba(255,255,255,.16); }
 
 /* 夜间模式（html.night）：黑色居多；日间=默认浅色（上方基础样式）。
    设备截图、元素树的文字配色按块逐一翻转，截图本身保持原色不受影响 */
 html.night { color-scheme: dark; }
 html.night body { background: #101012; color: #e5e7eb; }
+html.night .side { background: #17181b; }
+html.night .brand .bt { color: #f3f4f6; }
+html.night .side-foot { border-top-color: #303236; }
 html.night .col { background: #1b1c1f; }
 html.night .col-title { background: #232428; border-bottom-color: #303236; color: #f3f4f6; }
 html.night .col-title .hint, html.night .hint { color: #9ca3af; }

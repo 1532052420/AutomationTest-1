@@ -1283,18 +1283,22 @@ function buildTutItem(item) {
 }
 
 document.addEventListener('DOMContentLoaded', init);
-/* ---------- 日间/夜间模式切换（悬浮按钮，宫崎骏风日/月图标；默认日间=白色居多） ----------
-   按钮图标：日间显示月亮图（点击切夜间），夜间显示太阳图（点击切日间） */
+/* ---------- 日间/夜间模式切换（悬浮按钮，Mac/iPhone 简约风日/月图标；默认日间=白色居多） ----------
+   按钮图标：日间显示月亮（点击切夜间），夜间显示太阳（点击切日间）；颜色随主题自适应 */
 (function () {
   const KEY = 'locator_theme';
-  const ICON_MOON = '/static/theme_icons/theme_moon.png';
-  const ICON_SUN = '/static/theme_icons/theme_sun.png';
+  /* SF Symbols 风格：细线太阳 / 实心月牙 */
+  const ICON_SUN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">'
+    + '<circle cx="12" cy="12" r="4.1"/>'
+    + '<path d="M12 2.8v2M12 19.2v2M2.8 12h2M19.2 12h2M5.2 5.2l1.5 1.5M17.3 17.3l1.5 1.5M18.8 5.2l-1.5 1.5M6.7 17.3l-1.5 1.5"/></svg>';
+  const ICON_MOON = '<svg viewBox="0 0 24 24" fill="currentColor">'
+    + '<path d="M20.6 14.4A8.6 8.6 0 0 1 9.6 3.4 8.6 8.6 0 1 0 20.6 14.4Z"/></svg>';
 
   function apply(mode) {
     document.documentElement.classList.toggle('night', mode === 'night');
     const fab = document.getElementById('theme-fab');
     if (fab) {
-      fab.innerHTML = '<img src="' + (mode === 'night' ? ICON_SUN : ICON_MOON) + '" alt="切换主题">';
+      fab.innerHTML = mode === 'night' ? ICON_SUN : ICON_MOON;
       fab.title = mode === 'night' ? '切换到日间模式（白色）' : '切换到夜间模式（黑色）';
     }
   }
@@ -1317,6 +1321,12 @@ document.addEventListener('DOMContentLoaded', init);
     fab.addEventListener('click', toggle);
     document.body.appendChild(fab);
     apply(current());
+    // 首屏按已存主题直接渲染（不动画）；首帧之后开启过渡，点击切换时颜色平滑渐变
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () {
+        document.documentElement.classList.add('theme-anim');
+      });
+    });
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);

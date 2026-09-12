@@ -33,7 +33,9 @@ async function adminLoadFiles() {
   ADMIN_IS_ADMIN = d.is_admin !== false;
   if (d.auth === 'off') $('#authCard').style.display = 'none';
   else $('#authCard').style.display = '';
+  const pageY = window.scrollY;
   adminRenderList();
+  window.scrollTo(0, pageY);
   adminLoadSubdirs();
 }
 
@@ -46,8 +48,17 @@ function adminRenderList() {
   const files = adminFiltered();
   $('#fileCount').textContent = '· 共 ' + files.length + ' 个';
   const tb = $('#fileList');
+  // 保持滚动位置：页面级 + 列表容器内（筛选/重渲染不打断操作）
+  const pageY = window.scrollY;
+  const wrap = tb.closest('.tblwrap');
+  const listY = wrap ? wrap.scrollTop : 0;
+  const restore = () => {
+    window.scrollTo(0, pageY);
+    if (wrap) wrap.scrollTop = listY;
+  };
   if (!files.length) {
     tb.innerHTML = '<tr><td colspan="7"><div class="empty">该类型下暂无文件</div></td></tr>';
+    restore();
     return;
   }
   tb.innerHTML = files.map(f => {
@@ -60,13 +71,14 @@ function adminRenderList() {
     return '<tr>' +
       '<td><input type="checkbox" class="ck-file" data-path="' + esc(f.path) + '"' +
       (f.is_protected ? ' title="框架公共文件，仅管理员可操作"' : '') + '></td>' +
-      '<td><b>' + esc(f.path) + '</b></td>' +
+      '<td><b class="admin-file-path" title="' + esc(f.path) + '">' + esc(f.path) + '</b></td>' +
       '<td>' + esc(f.type_label) + (f.is_protected ? ' <span class="muted" title="框架公共文件，仅管理员可操作">🔒</span>' : '') + '</td>' +
       '<td class="muted">' + (f.size / 1024).toFixed(1) + ' KB</td>' +
       '<td class="muted">' + fmtDate(f.mtime) + '</td>' +
       '<td class="muted">' + esc(f.uploader) + '</td>' +
       '<td><div class="ops">' + ops + '</div></td></tr>';
   }).join('');
+  restore();
 }
 
 function adminSelected() {

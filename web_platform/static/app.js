@@ -116,7 +116,14 @@ async function pollFootStatus() {
     if (d) {
       const on = st.device_online > 0;
       d.className = 'dot ' + (on ? 'ok' : 'bad');
-      f.textContent = on ? '在线×' + st.device_online : '离线';
+      // 在线数量 + 首台设备序列号（长序列号截断，悬停看全）
+      let txt = on ? '在线×' + st.device_online : '离线';
+      if (on && st.devices && st.devices[0] && st.devices[0].udid) {
+        const udid = st.devices[0].udid;
+        txt += ' · ' + (udid.length > 14 ? udid.slice(0, 13) + '…' : udid);
+        f.title = '设备序列号: ' + udid;
+      }
+      f.textContent = txt;
     }
     const d2 = $('#dotAppium'), f2 = $('#footAppium');
     if (d2) {

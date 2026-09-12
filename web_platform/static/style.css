@@ -22,9 +22,10 @@ a:hover { text-decoration: none; }
 
 /* ---------- 布局：左侧导航 + 主内容 ---------- */
 .sidebar {
-  width: 216px; flex: 0 0 216px; position: sticky; top: 0; height: 100vh;
+  width: 216px; position: fixed; top: 0; left: 0; bottom: 0;
   background: var(--dark); border-right: 1px solid var(--line-soft);
   color: #a3a3a3; display: flex; flex-direction: column; padding: 18px 12px;
+  overflow-y: auto;
 }
 .sidebar .brand {
   display: flex; align-items: center; gap: 10px; padding: 6px 10px 16px;
@@ -54,7 +55,7 @@ a:hover { text-decoration: none; }
 .dot.ok { background: #22c55e; box-shadow: 0 0 6px #22c55e; }
 .dot.bad { background: #ff5c5c; box-shadow: 0 0 6px #ff5c5c; }
 
-main { flex: 1; min-width: 0; padding: 26px 30px 40px; }
+main { flex: 1; min-width: 0; padding: 26px 30px 40px; margin-left: 216px; }
 .pagehead { display: flex; align-items: center; gap: 14px; margin-bottom: 20px; }
 .pagehead h1 { font-size: 21px; color: var(--ink); font-weight: 700; }
 .pagehead .sub { color: var(--muted); font-size: 13px; }
@@ -239,6 +240,12 @@ img.thumb:hover { transform: scale(1.05); border-color: var(--accent); }
 #lightbox .lb-close:hover { background: rgba(255, 255, 255, .25); }
 
 /* ---------- 代码审查页：统计卡筛选 / 文件锚点 / 历史记录 ---------- */
+/* 管理后台：文件列表固定高度内滚（筛选不改变页面高度，滚动位置稳定） */
+.card .tblwrap.fixed-height { max-height: 52vh; overflow: auto; }
+.admin-file-path { white-space: nowrap; }
+#fileList td { white-space: nowrap; }
+#fileList td:nth-child(2) { max-width: 520px; overflow: hidden; text-overflow: ellipsis; }
+
 .stat.clickable { cursor: pointer; transition: transform .12s, box-shadow .12s; }
 .stat.clickable:hover { transform: translateY(-2px); }
 .stat.filter-on { outline: 2px solid var(--accent); box-shadow: 0 0 0 4px var(--accent-tint); }

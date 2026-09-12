@@ -97,13 +97,29 @@ async function adminLoadSubdirs() {
   });
   const kind = $('#upKind').value;
   const keep = $('#upSubdir').value;
-  const prefix = kind === 'pages' ? 'page_objects/app_ui/android/demoProject/pages/'
-    : kind === 'elements' ? 'page_objects/app_ui/android/demoProject/elements/' : 'cases/';
-  const options = ['', ...[...dirs].filter(d => d.startsWith(prefix))
-    .map(d => d.slice(prefix.length)).sort()];
+  const prefix = adminSubdirBase(kind);
+  const subdirs = [...dirs].filter(d => d.startsWith(prefix))
+    .map(d => d.slice(prefix.length)).sort();
+  const options = [''].concat(subdirs);
   $('#upSubdir').innerHTML = options.map(o =>
     '<option value="' + esc(o) + '">' + (o ? esc(o) : '（根目录）') + '</option>').join('');
   if (options.includes(keep)) $('#upSubdir').value = keep;
+  adminSubdirHint();
+}
+
+/* 类型 → 其根目录（目标子目录是相对它而言的） */
+function adminSubdirBase(kind) {
+  return kind === 'pages' ? 'page_objects/app_ui/android/demoProject/pages/'
+    : kind === 'elements' ? 'page_objects/app_ui/android/demoProject/elements/' : 'cases/';
+}
+
+/* 子目录提示：实时显示文件最终落在哪，避免「（根目录）到底指哪 / 下拉是不是空的」的困惑 */
+function adminSubdirHint() {
+  const base = adminSubdirBase($('#upKind').value);
+  const sub = $('#upSubdir').value;
+  const hasSubdir = [...$('#upSubdir').options].some(o => o.value);
+  $('#subdirHint').textContent = '上传到：' + base + sub
+    + (hasSubdir ? '' : '（该类型现有文件都在其根目录下，暂无子目录可选）');
 }
 
 async function adminUpload(force) {
@@ -185,6 +201,7 @@ function adminInit() {
   });
   $('#typeFilter').addEventListener('change', adminRenderList);
   $('#upKind').addEventListener('change', () => { adminLoadSubdirs(); });
+  $('#upSubdir').addEventListener('change', adminSubdirHint);
   $('#btnMkDir').addEventListener('click', adminMkDir);
   $('#btnBatchDownload').addEventListener('click', adminBatchDownload);
   $('#btnBatchDelete').addEventListener('click', adminBatchDelete);

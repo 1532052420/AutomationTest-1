@@ -29,6 +29,10 @@ app = Flask(__name__,
 # 关闭强缓存（改完即刷，对齐元素定位器的开发体验）与全局 no-store
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
 
+# 尾部斜杠宽容：/admin/ 与 /admin 同样可访问。
+# Flask 默认 strict_slashes 下带斜杠刷新页面会 404（浏览器地址栏带斜杠时刷新必现）
+app.url_map.strict_slashes = False
+
 
 @app.after_request
 def _no_cache(resp):

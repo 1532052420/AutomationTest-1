@@ -219,7 +219,7 @@ td .ops { display: flex; gap: 6px; flex-wrap: wrap; }
 
 /* ---------------- 用例执行记录（自建详情，替代 allure 报告查看） ---------------- */
 .cardhead { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
-.cardhead h3 { margin-bottom: 0; }
+.cardhead h3 { margin-bottom: 0; flex-shrink: 0; white-space: nowrap; }
 .cardhead .sub { margin-left: auto; }
 .card.mt { margin-top: 16px; }
 

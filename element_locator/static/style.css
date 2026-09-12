@@ -4,12 +4,17 @@ body {
   color: #222; background: #f5f6f8; height: 100vh; display: flex; flex-direction: column;
 }
 
-/* ---------- 顶部 ---------- */
+/* ---------- 顶部（自适应：窄屏自动换行，标题/按钮不再被压成竖排） ---------- */
 header {
   display: flex; align-items: center; justify-content: space-between;
+  flex-wrap: wrap; row-gap: 8px;
   padding: 10px 16px; background: #1f2937; color: #fff; flex: 0 0 auto;
 }
-.brand { font-size: 17px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+.brand { font-size: 17px; font-weight: 600; display: flex; align-items: center;
+  flex-wrap: wrap; row-gap: 6px; gap: 8px; flex: 1 1 auto; min-width: 0; }
+/* 标题/按钮/下拉：文字不拆行、控件不被压缩，空间不足时整体换行 */
+.app-title { white-space: nowrap; flex: 0 0 auto; }
+.back-platform, .ver, .hdr-right .btn { white-space: nowrap; flex: 0 0 auto; }
 .brand .sub { font-size: 12px; color: #9ca3af; margin-left: 10px; font-weight: 400; }
 /* 左上角回平台 logo */
 .back-platform {
@@ -40,10 +45,27 @@ header {
   font-size: 11px; font-weight: 600; color: #a5f3fc;
   background: #334155; border: 1px solid #475569; border-radius: 4px; padding: 1px 6px;
 }
-.hdr-right { display: flex; align-items: center; gap: 12px; }
+.hdr-right { display: flex; align-items: center; gap: 12px; flex: 0 0 auto; }
 .dev-info { font-size: 13px; color: #d1d5db; }
 .dev-info.ok { color: #34d399; }
 .dev-info.bad { color: #f87171; }
+
+/* ---------- 顶部窄屏适配：副标题让位、下拉收窄、刷新不竖排 ---------- */
+@media (max-width: 1280px) {
+  .brand .sub { display: none; }
+  .brand { font-size: 15px; }
+  .hdr-select { max-width: 150px; }
+}
+@media (max-width: 920px) {
+  header { padding: 8px 12px; }
+  .hdr-select { flex: 1 1 130px; max-width: none; }
+  /* 三栏改纵向堆叠，各栏给固定可视高度，横向不再互相挤压 */
+  main { flex-direction: column; overflow: auto; }
+  .left, .middle, .right { flex: 0 0 auto; }
+  .left .shot-wrap { height: 46vh; }
+  .middle .tree { max-height: 38vh; }
+  .right .tutorials { max-height: 40vh; }
+}
 
 /* ---------- 按钮 ---------- */
 .btn {
@@ -70,6 +92,11 @@ main { flex: 1; display: flex; gap: 10px; padding: 10px 12px; min-height: 0; }
 /* ---------- 左：截图 ---------- */
 .shot-wrap { position: relative; flex: 1; overflow: auto; background: #eef0f3; }
 #shot { display: block; width: 100%; max-width: none; }
+/* 截图显示尺寸切换（下拉）：机型预设按逻辑尺寸居中显示，点选映射按渲染比例自动适配 */
+.mini-select { margin-left: 8px; font-size: 12px; padding: 2px 6px; border: 1px solid #d1d5db;
+  border-radius: 6px; color: #374151; background: #fff; outline: none; cursor: pointer; }
+.mini-select:focus { border-color: #2563eb; }
+#shot.centered { margin: 14px auto; border-radius: 14px; box-shadow: 0 4px 18px rgba(0,0,0,.22); }
 #shot-overlay { position: absolute; border: 2px solid #ef4444; background: rgba(239,68,68,.15); pointer-events: none; display: none; z-index: 5; }
 .empty { padding: 40px 20px; text-align: center; color: #9ca3af; }
 
@@ -280,3 +307,78 @@ main { flex: 1; display: flex; gap: 10px; padding: 10px 12px; min-height: 0; }
   border: 6px solid transparent; border-bottom-color: #1f2937; border-top: none;
 }
 .steps-head .help-icon { vertical-align: 2px; }
+
+/* ---------- 日间/夜间模式切换（index.js 注入悬浮按钮，宫崎骏风日/月圆形图标） ---------- */
+.theme-fab {
+  position: fixed; right: 18px; bottom: 18px; z-index: 1200;
+  width: 48px; height: 48px; border-radius: 50%; border: none; cursor: pointer;
+  background: transparent; padding: 0; line-height: 0;
+  filter: drop-shadow(0 3px 8px rgba(0,0,0,.3)); transition: transform .15s;
+}
+.theme-fab:hover { transform: scale(1.1); }
+.theme-fab:active { transform: scale(.96); }
+.theme-fab img { width: 44px; height: 44px; border-radius: 50%; display: block; }
+
+/* 夜间模式（html.night）：黑色居多；日间=默认浅色（上方基础样式）。
+   设备截图、元素树的文字配色按块逐一翻转，截图本身保持原色不受影响 */
+html.night { color-scheme: dark; }
+html.night body { background: #101012; color: #e5e7eb; }
+html.night .col { background: #1b1c1f; }
+html.night .col-title { background: #232428; border-bottom-color: #303236; color: #f3f4f6; }
+html.night .col-title .hint, html.night .hint { color: #9ca3af; }
+html.night .toolbar { border-bottom-color: #303236; }
+html.night .toolbar input { background: #17181b; border-color: #3a3c42; color: #e5e7eb; }
+html.night .toolbar input:focus { border-color: #3b82f6; }
+html.night .shot-wrap { background: #17181b; }
+html.night .empty { color: #6b7280; }
+html.night .tree .tnode:hover { background: #2a2b30; }
+html.night .tree .tnode.sel { background: #1e3a8a; }
+html.night .tree .tnode .t-text { color: #f3f4f6; }
+html.night .tree .tnode .t-rid { color: #9ca3af; }
+html.night .detail { background: #202125; border-top-color: #303236; }
+html.night .attrs td { border-bottom-color: #2c2d31; }
+html.night .attrs td:first-child { color: #9ca3af; }
+html.night .loc-title { color: #e5e7eb; }
+html.night .loc-item { background: #1b1c1f; border-color: #3a3c42; }
+html.night .loc-item code { background: #101012; color: #e5e7eb; }
+html.night .cand-chip { background: #232428; border-color: #3a3c42; color: #d1d5db; }
+html.night .cand-chip:hover { background: #1e3a8a; color: #fff; }
+html.night .btn { background: #26272b; border-color: #3a3c42; color: #e5e7eb; }
+html.night .btn:hover { background: #303236; }
+html.night .btn.primary { background: #2563eb; color: #fff; border-color: #2563eb; }
+html.night .btn.primary:hover { background: #1d4ed8; }
+html.night .mini-select { background: #26272b; border-color: #3a3c42; color: #e5e7eb; }
+html.night .cat-head { background: #2a2b30; color: #e5e7eb; }
+html.night .cat-head:hover { background: #33353a; }
+html.night .tut-leaf { background: #1b1c1f; border-color: #2c2d31; }
+html.night .tut-leaf .tut-desc { color: #9ca3af; }
+html.night .tut-leaf .tut-code { background: #101012; }
+html.night .copy-btn { background: #26272b; border-color: #3a3c42; color: #d1d5db; }
+html.night .copy-btn.copied { background: #052e16; border-color: #10b981; }
+html.night .modal { background: #1b1c1f; color: #e5e7eb; }
+html.night .modal-title, html.night .modal-foot { border-color: #303236; }
+html.night .modal-body label { color: #d1d5db; }
+html.night .modal-body input, html.night .modal-body select {
+  background: #101012; border-color: #3a3c42; color: #e5e7eb; }
+html.night .modal-body input[readonly] { background: #17181b; color: #9ca3af; }
+html.night .el-content { background: #101012; border-color: #303236; color: #cbd5e1; }
+html.night .el-result.ok { background: #052e16; color: #4ade80; }
+html.night .el-result.err { background: #450a0a; color: #f87171; }
+html.night .flow-col { background: #202125; border-color: #303236; }
+html.night .flow-col .col-head { color: #f3f4f6; border-bottom-color: #303236; }
+html.night .flow-step { background: #172554; border-color: #1e40af; }
+html.night .flow-step .fs-label { color: #93c5fd; }
+html.night .help-icon { background: #26272b; border-color: #3a3c42; color: #9ca3af; }
+html.night .group-title, html.night .steps-head, html.night .pv-title { color: #f3f4f6; }
+html.night #case-steps { background: #17181b; border-color: #3a3c42; }
+html.night .step-row { border-bottom-color: #2c2d31; }
+html.night .step-cols { border-bottom-color: #303236; }
+html.night .steps-list { background: #17181b; border-color: #3a3c42; color: #d1d5db; }
+html.night .bind-note { background: #172554; border-color: #1e40af; color: #93c5fd; }
+html.night .adv-group { background: #17181b; border-color: #303236; }
+html.night .view-content { background: #101012; border-color: #303236; }
+html.night .op-note { color: #93c5fd; }
+html.night .dup-panel { background: #271c05; border-color: #a16207; }
+html.night .dup-tip { background: #271c05; border-color: #a16207; color: #fbbf24; }
+html.night .dup-tip code { background: #3a2c05; }
+html.night ::-webkit-scrollbar-thumb { background: #3a3c42; }

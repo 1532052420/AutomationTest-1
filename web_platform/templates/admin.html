@@ -11,7 +11,7 @@
 <main>
   <div class="pagehead">
     <h1>🗂 管理后台</h1>
-    <span class="sub" id="subTitle">上传用例 / 元素 / 页面对象，平台自动识别（上传即生效）</span>
+    <span class="sub" id="subTitle">上传用例 / 页面对象 / 元素，平台自动识别；框架公共文件受保护（仅管理员可操作）</span>
   </div>
 
   <div class="card" id="authCard" style="display:none">
@@ -29,32 +29,50 @@
       <div class="field"><label>类型</label>
         <select id="upKind">
           <option value="cases">测试用例（cases/，文件名 test_*.py）</option>
-          <option value="elements">元素仓库（xxxElements.py）</option>
+          <option value="elements">元素定位（.py / .yaml / .json）</option>
           <option value="pages">页面对象（xxxPage.py）</option>
         </select>
       </div>
-      <div class="field"><label>子目录（仅用例可填，如 demoProject/api，留空=根）</label>
-        <input type="text" id="upSubdir" placeholder="demoProject/api">
+      <div class="field"><label>目标子目录（可从已有目录选择）</label>
+        <select id="upSubdir"><option value="">（根目录）</option></select>
+      </div>
+      <div class="field"><label>上传人（用于追溯）</label>
+        <input type="text" id="upUploader" placeholder="你的名字">
+      </div>
+      <div class="field"><label>选择文件（.py / .yaml / .json，≤200KB）</label>
+        <input type="file" id="upFile" accept=".py,.yaml,.json">
       </div>
     </div>
     <div class="mt" style="display:flex;gap:10px;align-items:center">
-      <input type="file" id="upFile" accept=".py" style="color:var(--ink2)">
-      <label class="muted"><input type="checkbox" id="upForce"> 覆盖同名文件</label>
       <button id="btnUpload">⬆ 上传</button>
+      <label class="muted"><input type="checkbox" id="upForce"> 允许覆盖同名文件（自动备份历史版本）</label>
     </div>
-    <p class="muted mt" style="font-size:12px">上传前自动做语法校验（py_compile）；.py 且 ≤200KB；用例文件名必须 test_ 开头。</p>
+    <p class="muted mt" style="font-size:12px">上传前自动校验：py 语法错误提示行号、yaml/json 格式错误提示位置；元素文件支持 .py/.yaml/.json。</p>
   </div>
 
   <div class="card">
-    <div class="cardhead"><h3>📄 文件列表 <span class="muted" id="fileCount"></span>
-      <select id="listKind" style="margin-left:10px;background:var(--dark);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:2px 6px">
-        <option value="cases">测试用例</option>
-        <option value="elements">元素仓库</option>
-        <option value="pages">页面对象</option>
-      </select></h3></div>
+    <div class="cardhead">
+      <h3>📄 文件列表 <span class="muted" id="fileCount"></span>
+        <select id="typeFilter" style="margin-left:10px;background:var(--dark);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:2px 6px">
+          <option value="">全部文件</option>
+          <option value="case">测试用例</option>
+          <option value="page">页面对象</option>
+          <option value="element">元素定位</option>
+          <option value="framework">框架公共文件</option>
+        </select>
+      </h3>
+      <div class="ops">
+        <button class="ghost mini" id="btnMkDir">📁 新建文件夹</button>
+        <button class="ghost mini" id="btnBatchDownload">⬇ 批量下载</button>
+        <button class="mini danger-ghost" id="btnBatchDelete">🗑 批量删除</button>
+      </div>
+    </div>
     <div class="tblwrap">
       <table>
-        <thead><tr><th>文件（相对目录）</th><th>大小</th><th>修改时间</th><th>操作</th></tr></thead>
+        <thead><tr>
+          <th style="width:34px"><input type="checkbox" id="ckAll"></th>
+          <th>文件（相对目录）</th><th>文件类型</th><th>大小</th><th>修改时间</th><th>上传人</th><th>操作</th>
+        </tr></thead>
         <tbody id="fileList"></tbody>
       </table>
     </div>
@@ -68,6 +86,7 @@
     <div class="mops"><button class="ghost" id="mCancel">取消</button><button id="mOk">确定</button></div>
   </div>
 </div>
+<script src="/static/theme.js"></script>
 <script src="/static/app.js"></script>
 <script src="/static/admin.js"></script>
 </body>

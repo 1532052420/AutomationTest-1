@@ -1,0 +1,82 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="300" viewBox="0 0 600 300">
+  <defs>
+    <radialGradient id="sun2" cx="45%" cy="40%" r="70%">
+      <stop offset="0%" stop-color="#ffe9b0"/>
+      <stop offset="55%" stop-color="#ffc46b"/>
+      <stop offset="100%" stop-color="#ef9a45"/>
+    </radialGradient>
+    <radialGradient id="moon2" cx="42%" cy="38%" r="72%">
+      <stop offset="0%" stop-color="#f4f9ff"/>
+      <stop offset="55%" stop-color="#dfe9f5"/>
+      <stop offset="100%" stop-color="#b9c9de"/>
+    </radialGradient>
+    <filter id="wc2" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="5"/>
+    </filter>
+    <filter id="wc2s" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="2"/>
+    </filter>
+    <mask id="bite2">
+      <rect x="-160" y="-160" width="320" height="320" fill="#fff"/>
+      <circle cx="36" cy="-26" r="60" fill="#000"/>
+    </mask>
+  </defs>
+
+  <!-- ============ 日：水彩晕染暖阳 ============ -->
+  <g transform="translate(150,150)">
+    <!-- 水彩光晕：多层半透明晕染 -->
+    <circle r="112" fill="#ffd98f" opacity=".28" filter="url(#wc2)"/>
+    <circle r="96" fill="#ffcf7a" opacity=".30" filter="url(#wc2)"/>
+    <!-- 笔触光芒：不规则水彩短笔触 -->
+    <g fill="#f7b45c" opacity=".72" filter="url(#wc2s)">
+      <path d="M -10 -104 Q 2 -128 18 -110 Q 6 -94 -10 -104 Z"/>
+      <path d="M 62 -78 Q 92 -98 96 -74 Q 72 -62 62 -78 Z"/>
+      <path d="M 96 -14 Q 126 -8 122 12 Q 96 8 96 -14 Z"/>
+      <path d="M 72 66 Q 88 92 64 98 Q 54 76 72 66 Z"/>
+      <path d="M -8 104 Q 2 126 -16 120 Q -18 102 -8 104 Z"/>
+      <path d="M -72 74 Q -94 92 -102 70 Q -80 58 -72 74 Z"/>
+      <path d="M -102 -10 Q -128 -2 -122 -22 Q -98 -26 -102 -10 Z"/>
+      <path d="M -66 -76 Q -84 -100 -60 -104 Q -50 -82 -66 -76 Z"/>
+    </g>
+    <!-- 日轮：水彩圆，边缘不规则柔化 -->
+    <circle r="68" fill="url(#sun2)" filter="url(#wc2s)"/>
+    <circle r="62" fill="url(#sun2)" opacity=".85" filter="url(#wc2s)"/>
+    <!-- 高光水点 -->
+    <circle cx="-22" cy="-24" r="16" fill="#fff3d2" opacity=".75" filter="url(#wc2s)"/>
+    <circle cx="14" cy="-34" r="8" fill="#fff3d2" opacity=".55" filter="url(#wc2s)"/>
+    <circle cx="26" cy="18" r="10" fill="#f19a3e" opacity=".5" filter="url(#wc2s)"/>
+    <!-- 飞白笔触 -->
+    <path d="M -44 30 Q -20 46 8 40" fill="none" stroke="#fff1c8" stroke-width="8"
+          stroke-linecap="round" opacity=".65" filter="url(#wc2s)"/>
+  </g>
+
+  <!-- ============ 月：蓝调水彩月牙 ============ -->
+  <g transform="translate(450,150)">
+    <circle r="110" fill="#cfdcf0" opacity=".30" filter="url(#wc2)"/>
+    <circle r="92" fill="#c3d3ea" opacity=".30" filter="url(#wc2)"/>
+    <g mask="url(#bite2)">
+      <circle r="70" fill="url(#moon2)" filter="url(#wc2s)"/>
+      <circle r="64" fill="url(#moon2)" opacity=".8" filter="url(#wc2s)"/>
+      <!-- 靛蓝晕染坑 -->
+      <circle cx="-26" cy="-14" r="12" fill="#a9bdd8" opacity=".8" filter="url(#wc2s)"/>
+      <circle cx="-6" cy="24" r="8" fill="#a9bdd8" opacity=".7" filter="url(#wc2s)"/>
+      <circle cx="-44" cy="20" r="6" fill="#a9bdd8" opacity=".6" filter="url(#wc2s)"/>
+      <!-- 内缘高光 -->
+      <path d="M 34 -42 Q 58 0 34 44" fill="none" stroke="#ffffff" stroke-width="9"
+            stroke-linecap="round" opacity=".85" filter="url(#wc2s)"/>
+    </g>
+    <!-- 颜料飞溅星点 -->
+    <g fill="#e8f1fb">
+      <circle cx="56" cy="-58" r="5" filter="url(#wc2s)"/>
+      <circle cx="78" cy="-26" r="3.4" filter="url(#wc2s)"/>
+      <circle cx="70" cy="30" r="4.2" filter="url(#wc2s)"/>
+      <circle cx="34" cy="66" r="3" filter="url(#wc2s)"/>
+      <path d="M 50 -40 Q 52 -32 60 -30 Q 52 -28 50 -20 Q 48 -28 40 -30 Q 48 -32 50 -40 Z" opacity=".9"/>
+    </g>
+    <!-- 水彩夜云 -->
+    <g fill="#e6eef8" opacity=".85" filter="url(#wc2s)">
+      <ellipse cx="6" cy="66" rx="44" ry="12"/>
+      <ellipse cx="36" cy="58" rx="26" ry="9"/>
+    </g>
+  </g>
+</svg>

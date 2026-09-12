@@ -8,7 +8,7 @@
 </head>
 <body>
 <header>
-  <div class="brand"><a class="back-platform" href="http://127.0.0.1:8080/" title="回到 AppUI 自动化测试平台">🏠<span>平台</span></a> 🎯 App 元素定位器 <span id="app-version" class="ver">v2.6</span> <span class="sub">AutomationTest 框架 · 截图点选 → 一键写进元素库</span>
+  <div class="brand"><a class="back-platform" href="http://127.0.0.1:8080/" title="回到 AppUI 自动化测试平台">🏠<span>平台</span></a> <span class="app-title">🎯 App 元素定位器</span> <span id="app-version" class="ver">v2.6</span> <span class="sub">AutomationTest 框架 · 截图点选 → 一键写进元素库</span>
     <select id="open-case-sel" class="hdr-select" title="选择用例文件打开编辑"><option value="">📂 打开用例…</option></select>
     <select id="open-ele-sel" class="hdr-select" title="选择元素定位文件打开编辑"><option value="">🗂 打开元素文件…</option></select>
     <select id="open-page-sel" class="hdr-select" title="选择页面操作文件打开编辑"><option value="">🧩 打开页面操作…</option></select>
@@ -22,7 +22,14 @@
 <main>
   <!-- 左：设备截图 -->
   <section class="col left">
-    <div class="col-title">设备截图 <span class="hint">点截图上的元素即可选中</span></div>
+    <div class="col-title">设备截图
+      <select id="shot-size-sel" class="mini-select" title="截图显示尺寸：默认铺满栏宽；机型预设按该机型屏幕逻辑尺寸显示，点选映射自动适配">
+        <option value="default">默认（铺满栏宽）</option>
+        <option value="iphone15pro">iPhone 15 Pro（393×852）</option>
+        <option value="iqoo15">iQOO 15（411×905）</option>
+      </select>
+      <span class="hint">点截图上的元素即可选中</span>
+    </div>
     <div id="shot-wrap" class="shot-wrap">
       <img id="shot" alt="设备截图" style="display:none">
       <div id="shot-overlay"></div>
@@ -247,6 +254,6 @@
 <!-- 字段帮助气泡（点击问号显示） -->
 <div id="help-tip" class="help-tip" style="display:none"></div>
 
-<script src="/static/index.js?v=19"></script>
+<script src="/static/index.js?v=22"></script>
 </body>
 </html>

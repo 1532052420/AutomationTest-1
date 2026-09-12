@@ -299,3 +299,41 @@ tr.auto-head td { background: var(--panel2); }
 .mtree-item { padding: 4px 8px; border-radius: 6px; cursor: pointer; font-size: 12.5px; transition: background .1s; }
 .mtree-item:hover { background: rgba(255,255,255,.06); }
 .mtree-item.on { background: var(--accent-tint); color: var(--ink); }
+
+/* ---------- 日间/夜间模式切换（theme.js 注入悬浮按钮，宫崎骏风日/月圆形图标） ---------- */
+.theme-fab {
+  position: fixed; right: 18px; bottom: 18px; z-index: 1200;
+  width: 48px; height: 48px; border-radius: 50%; border: none; cursor: pointer;
+  background: transparent; padding: 0; line-height: 0;
+  filter: drop-shadow(0 3px 8px rgba(0,0,0,.3)); transition: transform .15s;
+}
+.theme-fab:hover { transform: scale(1.1); }
+.theme-fab:active { transform: scale(.96); }
+.theme-fab img { width: 44px; height: 44px; border-radius: 50%; display: block; }
+
+/* 日间模式（html.day）：白色居多，变量整体翻浅；夜间=默认深色（:root）。
+   --dark（日志/代码盒背景）日间保持深色——代码区深底浅字更易读 */
+html.day { color-scheme: light;
+  --primary: #1f2937; --primary2: #111827; --primary-ink: #ffffff;
+  --accent: #0284c7; --accent2: #0284c7; --accent-deep: #0369a1; --accent-tint: rgba(2,132,199,.10);
+  --ok: #16a34a; --ok-text: #15803d; --bad: #dc2626; --bad-text: #b91c1c;
+  --run: #0284c7; --stop: #c2410c; --purple: #6d28d9;
+  --ink: #17181a; --ink2: #343a44; --muted: #6b7280;
+  --line: rgba(0,0,0,.15); --line-soft: rgba(0,0,0,.07);
+  --bg: #f4f5f7; --panel: #ffffff; --panel2: #eef0f3;
+  --card-shadow: 0 1px 3px rgba(0,0,0,.08);
+  --card-shadow-hover: 0 3px 14px rgba(0,0,0,.14);
+}
+/* 深色主题里写死的白色半透明面，日间下翻转 */
+html.day .sidebar { background: #ffffff; color: #52525b; }
+html.day .sidebar .brand { color: #111; }
+html.day .sidebar nav a { color: #52525b; }
+html.day .sidebar nav a:hover { background: rgba(0,0,0,.05); color: #111; }
+html.day .sidebar nav a.on { background: rgba(0,0,0,.08); color: #111; }
+html.day tbody tr:nth-child(even) { background: rgba(0,0,0,.025); }
+html.day .bar { background: rgba(0,0,0,.08); }
+html.day button.ghost { background: rgba(0,0,0,.03); }
+html.day button.ghost:hover { background: rgba(0,0,0,.07); color: #111; }
+html.day button:disabled { background: #d4d4d8; color: #8e8e93; }
+html.day .mtree-item:hover { background: rgba(0,0,0,.05); }
+html.day .st-PENDING { background: #a1a1aa; }

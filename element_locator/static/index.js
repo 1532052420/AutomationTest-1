@@ -98,6 +98,14 @@ async function init() {
   $('btn-case').addEventListener('click', openCaseModal);
   $('shot').addEventListener('click', onShotClick);
   $('shot').addEventListener('dblclick', onShotDblClick);   // 双击执行器：设备真实点击
+  // 截图显示尺寸：机型预设切换 + 记住上次选择
+  // （判空防御：浏览器缓存了旧版 index.html 时该下拉不存在，避免 init 中断）
+  const sizeSel = document.getElementById('shot-size-sel');
+  if (sizeSel) {
+    sizeSel.addEventListener('change', applyShotSize);
+    try { sizeSel.value = localStorage.getItem('locator_shot_size') || 'default'; } catch (e) {}
+    applyShotSize();
+  }
   $('btn-tap').addEventListener('click', onTapElement);      // ▶ 设备上点击
   $('tree-search').addEventListener('input', onTreeSearch);
   $('tut-search').addEventListener('input', onTutSearch);
@@ -453,10 +461,32 @@ function highlightShot(node) {
   const scale = img.clientWidth / state.width;
   const [x1, y1, x2, y2] = node.bounds_num;
   ov.style.display = 'block';
-  ov.style.left = (x1 * scale) + 'px';
-  ov.style.top = (y1 * scale) + 'px';
+  // 截图选了机型预设时居中显示，高亮框要加上图片在栏内的偏移
+  ov.style.left = (img.offsetLeft + x1 * scale) + 'px';
+  ov.style.top = (img.offsetTop + y1 * scale) + 'px';
   ov.style.width = ((x2 - x1) * scale) + 'px';
   ov.style.height = ((y2 - y1) * scale) + 'px';
+}
+
+/* ---------- 截图显示尺寸（默认铺满栏宽；机型预设按其逻辑屏幕尺寸居中显示） ---------- */
+// iPhone15Pro 逻辑分辨率 393×852；iQOO15 为 2K(1440×3168) 按 560dpi 换算约 411×905
+const SHOT_SIZES = { iphone15pro: 393, iqoo15: 411 };
+function applyShotSize() {
+  const sel = $('shot-size-sel');
+  const img = $('shot');
+  const v = sel ? sel.value : 'default';
+  try { localStorage.setItem('locator_shot_size', v); } catch (e) { /* 隐私模式忽略 */ }
+  const w = SHOT_SIZES[v];
+  if (w) {
+    img.classList.add('centered');
+    img.style.width = w + 'px';
+    img.style.height = 'auto';
+  } else {
+    img.classList.remove('centered');
+    img.style.width = '';
+    img.style.height = '';
+  }
+  if (state.selNode) highlightShot(state.selNode);
 }
 function renderDetail(node) {
   $('detail').style.display = 'block';
@@ -1253,3 +1283,42 @@ function buildTutItem(item) {
 }
 
 document.addEventListener('DOMContentLoaded', init);
+/* ---------- 日间/夜间模式切换（悬浮按钮，宫崎骏风日/月图标；默认日间=白色居多） ----------
+   按钮图标：日间显示月亮图（点击切夜间），夜间显示太阳图（点击切日间） */
+(function () {
+  const KEY = 'locator_theme';
+  const ICON_MOON = '/static/theme_icons/theme_moon.png';
+  const ICON_SUN = '/static/theme_icons/theme_sun.png';
+
+  function apply(mode) {
+    document.documentElement.classList.toggle('night', mode === 'night');
+    const fab = document.getElementById('theme-fab');
+    if (fab) {
+      fab.innerHTML = '<img src="' + (mode === 'night' ? ICON_SUN : ICON_MOON) + '" alt="切换主题">';
+      fab.title = mode === 'night' ? '切换到日间模式（白色）' : '切换到夜间模式（黑色）';
+    }
+  }
+
+  function current() {
+    try { if (localStorage.getItem(KEY) === 'night') return 'night'; } catch (e) { /* 忽略 */ }
+    return 'day';
+  }
+
+  function toggle() {
+    const m = current() === 'night' ? 'day' : 'night';
+    try { localStorage.setItem(KEY, m); } catch (e) { /* 忽略 */ }
+    apply(m);
+  }
+
+  function init() {
+    const fab = document.createElement('button');
+    fab.id = 'theme-fab';
+    fab.className = 'theme-fab';
+    fab.addEventListener('click', toggle);
+    document.body.appendChild(fab);
+    apply(current());
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
+})();

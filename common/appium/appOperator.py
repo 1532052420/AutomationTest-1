@@ -25,8 +25,42 @@ import allure
 import logging
 logger = logging.getLogger('appOperator')
 import base64
+import time
 import ujson
 import os
+
+# 操作步骤编号：日志里给每个操作标「步骤N」并分行展示（动作/详情/结果各占一行），
+# 每条用例开始时由 conftest 调 reset_action_step_no() 归零
+_action_step_no = 0
+
+
+def _next_action_step_no():
+    global _action_step_no
+    _action_step_no += 1
+    return _action_step_no
+
+
+def reset_action_step_no():
+    """重置操作步骤编号（每条用例开始时调用）"""
+    global _action_step_no
+    _action_step_no = 0
+
+
+def _log_action_result(step_no, action, detail, ok, cost_ms=None, extra=''):
+    """按步骤样式分行记录操作日志：动作/详情/结果各占一行，allure 日志附件里一眼一个步骤。"""
+    lines = ['▶ 步骤%d · %s' % (step_no, action)]
+    for key, value in detail:
+        lines.append('   ├ %s: %s' % (key, value))
+    if ok:
+        cost = (' · 耗时 %dms' % cost_ms) if cost_ms is not None else ''
+        lines.append('   └ ✔ 成功%s%s' % (cost, (' · ' + extra) if extra else ''))
+    else:
+        lines.append('   └ ✖ 失败 · %s' % extra)
+    msg = '\n'.join(lines)
+    if ok:
+        logger.info(msg)
+    else:
+        logger.error(msg)
 
 class AppOperator:
     """
@@ -76,17 +110,25 @@ class AppOperator:
 
     def click(self,element):
         desc=self._element_desc(element)
-        logger.info('点击元素 %s'%desc)
+        step_no=_next_action_step_no()
         with allure.step('点击元素 %s'%desc):
-            webElement=self._change_element_to_webElement_type(element)
-            if webElement:
-                try:
-                    webElement.click()
-                except StaleElementReferenceException:
-                    # uiautomator2 8.x 元素缓存严格：find 与 click 之间界面刷新(如 toast 消失)会使引用失效，重定位一次再点
-                    webElement=self._change_element_to_webElement_type(element)
-                    if webElement:
+            t0=time.time()
+            try:
+                webElement=self._change_element_to_webElement_type(element)
+                if webElement:
+                    try:
                         webElement.click()
+                    except StaleElementReferenceException:
+                        # uiautomator2 8.x 元素缓存严格：find 与 click 之间界面刷新(如 toast 消失)会使引用失效，重定位一次再点
+                        webElement=self._change_element_to_webElement_type(element)
+                        if webElement:
+                            webElement.click()
+                _log_action_result(step_no, '点击元素', [('定位', desc)], True,
+                                   cost_ms=int((time.time()-t0)*1000))
+            except Exception as exc:
+                _log_action_result(step_no, '点击元素', [('定位', desc)], False,
+                                   extra=str(exc)[:150])
+                raise
         
     def click_web_element(self,element):
         """由于混合应用存在点击无效的情况，故混合应用的点击采用selenium的tab操作确保能够正常点击
@@ -106,12 +148,22 @@ class AppOperator:
 
     def sendText(self,element,text):
         desc=self._element_desc(element)
-        logger.info('输入 %s ← 「%s」'%(desc,text))
+        step_no=_next_action_step_no()
         with allure.step('输入 %s 「%s」'%(desc,text)):
-            webElement=self._change_element_to_webElement_type(element)
-            if webElement:
-                webElement.clear()
-                webElement.send_keys(text)
+            t0=time.time()
+            try:
+                webElement=self._change_element_to_webElement_type(element)
+                if webElement:
+                    webElement.clear()
+                    webElement.send_keys(text)
+                _log_action_result(step_no, '输入文本',
+                                   [('目标', desc), ('内容', '「%s」' % text)],
+                                   True, cost_ms=int((time.time()-t0)*1000))
+            except Exception as exc:
+                _log_action_result(step_no, '输入文本',
+                                   [('目标', desc), ('内容', '「%s」' % text)],
+                                   False, extra=str(exc)[:150])
+                raise
 
     def is_displayed(self,element):
         webElement=self._change_element_to_webElement_type(element)
@@ -507,14 +559,16 @@ class AppOperator:
         :param ok: 断言结果(真值)
         :param fail_msg: 失败时的补充说明
         """
+        step_no=_next_action_step_no()
         if ok:
-            logger.info('断言「%s」通过，成功截图已入 allure'%desc)
             with allure.step('断言：「%s」'%desc):
                 self.get_screenshot('断言成功_%s'%desc)
+            _log_action_result(step_no, '断言「%s」'%desc, [], True, extra='成功截图已入 allure')
             return True
         with allure.step('断言失败：「%s」 %s'%(desc,fail_msg)):
             self.get_screenshot('断言失败_%s'%desc)
-        logger.error('断言「%s」失败：%s（失败截图已入 allure）'%(desc,fail_msg))
+        _log_action_result(step_no, '断言「%s」'%desc, [], False,
+                           extra='%s（失败截图已入 allure）'%fail_msg)
         raise AssertionError('断言「%s」失败：%s'%(desc,fail_msg))
 
     def get_geolocation(self):
@@ -1193,9 +1247,17 @@ class AppOperator:
             y (float):
             duration ([type], optional): [description]. Defaults to None.
         """
-        logger.info('点击坐标 (%s, %s)'%(x,y))
+        step_no=_next_action_step_no()
         with allure.step('点击坐标 (%s, %s)'%(x,y)):
-            self._driver.tap([(x,y)],duration)
+            t0=time.time()
+            try:
+                self._driver.tap([(x,y)],duration)
+                _log_action_result(step_no, '点击坐标', [('坐标', '(%s, %s)' % (x, y))],
+                                   True, cost_ms=int((time.time()-t0)*1000))
+            except Exception as exc:
+                _log_action_result(step_no, '点击坐标', [('坐标', '(%s, %s)' % (x, y))],
+                                   False, extra=str(exc)[:150])
+                raise
 
     def touch_tap(self,element,xoffset=None,yoffset=None,count=1,is_perfrom=True):
         """

@@ -1,0 +1,93 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="300" viewBox="0 0 600 300">
+  <defs>
+    <radialGradient id="sun1" cx="42%" cy="38%" r="72%">
+      <stop offset="0%" stop-color="#fff8dc"/>
+      <stop offset="45%" stop-color="#ffdd7e"/>
+      <stop offset="80%" stop-color="#f6b14e"/>
+      <stop offset="100%" stop-color="#eda043"/>
+    </radialGradient>
+    <radialGradient id="moon1" cx="40%" cy="35%" r="75%">
+      <stop offset="0%" stop-color="#fffdf2"/>
+      <stop offset="60%" stop-color="#f7ecc4"/>
+      <stop offset="100%" stop-color="#e9d9a6"/>
+    </radialGradient>
+    <radialGradient id="halo1" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#ffe9a8" stop-opacity=".55"/>
+      <stop offset="100%" stop-color="#ffe9a8" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="soft1" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="2.2"/>
+    </filter>
+    <mask id="bite1">
+      <rect x="-160" y="-160" width="320" height="320" fill="#fff"/>
+      <circle cx="34" cy="-30" r="62" fill="#000"/>
+    </mask>
+  </defs>
+
+  <!-- ============ 日：暖阳 ============ -->
+  <g transform="translate(150,150)">
+    <circle r="118" fill="url(#halo1)"/>
+    <!-- 光芒：长短交替圆头手绘感 -->
+    <g fill="#f5bd5e" opacity=".9">
+      <g id="ray1">
+        <path d="M -7 -96 Q 0 -122 7 -96 Q 0 -88 -7 -96 Z"/>
+      </g>
+      <use href="#ray1" transform="rotate(30)"/>
+      <use href="#ray1" transform="rotate(60)"/>
+      <use href="#ray1" transform="rotate(90)  scale(1.15)"/>
+      <use href="#ray1" transform="rotate(120)"/>
+      <use href="#ray1" transform="rotate(150)"/>
+      <use href="#ray1" transform="rotate(180) scale(1.1)"/>
+      <use href="#ray1" transform="rotate(210)"/>
+      <use href="#ray1" transform="rotate(240)"/>
+      <use href="#ray1" transform="rotate(270) scale(1.18)"/>
+      <use href="#ray1" transform="rotate(300)"/>
+      <use href="#ray1" transform="rotate(330)"/>
+    </g>
+    <circle r="72" fill="url(#sun1)" stroke="#e8a94e" stroke-width="3" stroke-opacity=".55"/>
+    <!-- 内圈柔光与手绘感弧线 -->
+    <circle r="52" fill="#fff3cf" opacity=".45" filter="url(#soft1)"/>
+    <path d="M -34 -18 Q -20 -34 0 -36" fill="none" stroke="#fff8e2" stroke-width="7"
+          stroke-linecap="round" opacity=".8"/>
+    <path d="M -30 22 Q -8 36 18 26" fill="none" stroke="#f2b45c" stroke-width="5"
+          stroke-linecap="round" opacity=".6"/>
+    <!-- 挂在太阳下缘的小云 -->
+    <g fill="#ffffff" opacity=".92">
+      <ellipse cx="-38" cy="66" rx="40" ry="17"/>
+      <ellipse cx="-8" cy="58" rx="30" ry="14"/>
+      <ellipse cx="-62" cy="60" rx="24" ry="12"/>
+    </g>
+    <g fill="#dfe8f2" opacity=".55">
+      <ellipse cx="-38" cy="74" rx="38" ry="9"/>
+    </g>
+  </g>
+
+  <!-- ============ 月：奶油月牙 ============ -->
+  <g transform="translate(450,150)">
+    <circle r="112" fill="url(#halo1)" opacity=".8"/>
+    <g mask="url(#bite1)">
+      <circle r="74" fill="url(#moon1)" stroke="#d9c68d" stroke-width="3" stroke-opacity=".5"/>
+      <!-- 陨石坑 -->
+      <circle cx="-28" cy="-12" r="11" fill="#dbc98f" opacity=".7"/>
+      <circle cx="-8" cy="26" r="7" fill="#dbc98f" opacity=".6"/>
+      <circle cx="-46" cy="24" r="5" fill="#dbc98f" opacity=".55"/>
+      <!-- 月牙内缘柔光 -->
+      <path d="M 38 -44 Q 62 0 38 46" fill="none" stroke="#fffdf2" stroke-width="9"
+            stroke-linecap="round" opacity=".9"/>
+    </g>
+    <!-- 星星：四角闪光 -->
+    <g fill="#ffe9a8">
+      <path d="M 52 -66 Q 55 -54 68 -50 Q 55 -46 52 -34 Q 49 -46 36 -50 Q 49 -54 52 -66 Z"/>
+      <path d="M 76 -8 Q 78 0 86 2 Q 78 4 76 12 Q 74 4 66 2 Q 74 0 76 -8 Z" opacity=".9"/>
+      <path d="M 40 62 Q 43 74 56 78 Q 43 82 40 94 Q 37 82 24 78 Q 37 74 40 62 Z" opacity=".8"/>
+      <circle cx="66" cy="-30" r="3.4" opacity=".85"/>
+      <circle cx="22" cy="-78" r="2.8" opacity=".7"/>
+      <circle cx="84" cy="34" r="2.6" opacity=".65"/>
+    </g>
+    <!-- 拂过月牙的细云 -->
+    <g fill="#f2f6fb" opacity=".85">
+      <ellipse cx="18" cy="64" rx="42" ry="12"/>
+      <ellipse cx="46" cy="56" rx="26" ry="10"/>
+    </g>
+  </g>
+</svg>

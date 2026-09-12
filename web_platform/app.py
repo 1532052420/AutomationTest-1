@@ -43,6 +43,10 @@ app.register_blueprint(platform_bp)
 from web_platform.debug_routes import bp as debug_bp
 app.register_blueprint(debug_bp)
 
+# 管理后台（用例/元素/页面对象 上传与管理）：独立蓝图
+from web_platform.admin_routes import bp as admin_bp
+app.register_blueprint(admin_bp)
+
 
 if __name__ == '__main__':
     print('App UI 自动化测试平台已启动: http://127.0.0.1:%d/' % PLATFORM_CFG.port)

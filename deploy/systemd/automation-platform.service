@@ -1,0 +1,19 @@
+# 自动化测试平台服务（systemd）
+# 放置到 /etc/systemd/system/ 后: systemctl daemon-reload && systemctl enable --now automation-platform
+[Unit]
+Description=AutomationTest Web Platform (:8080)
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/opt/AutomationTest
+ExecStart=/opt/AutomationTest/.venv/bin/python web_platform/app.py
+Restart=always
+RestartSec=3
+# 管理后台访问口令（团队部署必设！）: 生成方式 python3 -c "import secrets;print(secrets.token_hex(16))"
+Environment=ADMIN_TOKEN=CHANGE_ME
+Environment=PYTHONIOENCODING=utf-8
+
+[Install]
+WantedBy=multi-user.target

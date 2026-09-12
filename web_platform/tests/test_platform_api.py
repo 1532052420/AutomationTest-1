@@ -28,12 +28,13 @@ FAKE_RUN = '20991231_901'
 RUNS_DIR = os.path.join(ROOT, 'output', 'runs')
 
 
-def http(method, path, body=None, timeout=30, no_redirect=False):
+def http(method, path, body=None, timeout=30, no_redirect=False, raw_body=None, headers=None):
     """返回 (status_code, body_str, headers)"""
-    req = urllib.request.Request(
-        BASE + path, method=method,
-        data=json.dumps(body).encode('utf-8') if body is not None else None,
-        headers={'Content-Type': 'application/json'})
+    data = raw_body if raw_body is not None else (json.dumps(body).encode('utf-8') if body is not None else None)
+    hdrs = dict(headers or {})
+    if raw_body is None and body is not None:
+        hdrs.setdefault('Content-Type', 'application/json')
+    req = urllib.request.Request(BASE + path, method=method, data=data, headers=hdrs)
     opener = urllib.request.build_opener(_NoRedirect) if no_redirect else urllib.request.build_opener()
     try:
         with opener.open(req, timeout=timeout) as r:
@@ -520,3 +521,97 @@ def test_launcher_script_clean():
     assert 'web_platform/app.py' in content and 'element_locator/server.py' in content
     assert 'stop-platform' in content or 'pkill' in content
     subprocess.run(['bash', '-n', path], check=True)
+
+# ---------------------------------------------------------------- 管理后台
+def test_admin_upload_list_delete(platform):
+    """上传→列表→覆盖保护→删除 全链路（本机模式无口令）"""
+    import io
+    leftover = os.path.join(ROOT, 'cases/demoProject/api/test_admin_upload.py')
+    if os.path.isfile(leftover):
+        os.remove(leftover)
+    boundary = '----dbg'
+    payload = ('# 管理后台上传用例\n'
+               'from common.hamcrest.hamcrest import assert_that\n\n\n'
+               'class TestAdminUpload:\n'
+               '    def test_admin_upload_case(self):\n'
+               '        assert_that(1).is_equal_to(1)\n').encode()
+    body = (('--%s\r\nContent-Disposition: form-data; name="kind"\r\n\r\ncases\r\n'
+             '--%s\r\nContent-Disposition: form-data; name="subdir"\r\n\r\ndemoProject/api\r\n'
+             '--%s\r\nContent-Disposition: form-data; name="file"; filename="test_admin_upload.py"\r\n'
+             'Content-Type: text/x-python\r\n\r\n') % (boundary, boundary, boundary)).encode() \
+        + payload + ('\r\n--%s--\r\n' % boundary).encode()
+    code, body_resp, _ = http('POST', '/api/admin/upload', raw_body=body,
+                              headers={'Content-Type': 'multipart/form-data; boundary=' + boundary})
+    d = json.loads(body_resp)
+    assert d['ok'], d
+    assert d['path'] == 'cases/demoProject/api/test_admin_upload.py'
+    assert os.path.isfile(os.path.join(ROOT, d['path']))
+    # 语法非法文件被拒
+    bad = b'class Broken:\n  def x(:\n'
+    body2 = (('--%s\r\nContent-Disposition: form-data; name="kind"\r\n\r\ncases\r\n'
+              '--%s\r\nContent-Disposition: form-data; name="file"; filename="test_bad.py"\r\n\r\n') % (boundary, boundary)).encode() \
+        + bad + ('\r\n--%s--\r\n' % boundary).encode()
+    code, body_resp, _ = http('POST', '/api/admin/upload', raw_body=body2,
+                              headers={'Content-Type': 'multipart/form-data; boundary=' + boundary})
+    assert json.loads(body_resp)['ok'] is False and '语法' in json.loads(body_resp)['msg']
+    # 列表可见
+    code, body_resp, _ = http('GET', '/api/admin/files?kind=cases')
+    paths = [f['path'] for f in json.loads(body_resp)['files']]
+    assert 'demoProject/api/test_admin_upload.py' in paths
+    # 删除
+    code, body_resp, _ = http('DELETE', '/api/admin/file?kind=cases&path=demoProject%2Fapi%2Ftest_admin_upload.py')
+    assert json.loads(body_resp)['ok']
+    assert not os.path.isfile(os.path.join(ROOT, 'cases/demoProject/api/test_admin_upload.py'))
+
+
+def test_admin_upload_rejects(platform):
+    """文件名规范/路径穿越/超大文件 拒绝"""
+    import io
+    def multipart(fields, filename='test_x.py', content=b'pass\n'):
+        boundary = '----dbg'
+        parts = ''.join('--%s\r\nContent-Disposition: form-data; name="%s"\r\n\r\n%s\r\n'
+                        % (boundary, k, v) for k, v in fields.items())
+        parts += ('--%s\r\nContent-Disposition: form-data; name="file"; filename="%s"\r\n'
+                  'Content-Type: text/x-python\r\n\r\n' % (boundary, filename))
+        return (parts.encode() + content + ('\r\n--%s--\r\n' % boundary).encode()), boundary
+
+    body, b = multipart({'kind': 'cases', 'subdir': ''}, filename='not_test.py')
+    code, body_resp, _ = http('POST', '/api/admin/upload', raw_body=body,
+                              headers={'Content-Type': 'multipart/form-data; boundary=' + b})
+    assert json.loads(body_resp)['ok'] is False and '规范' in json.loads(body_resp)['msg']
+    body, b = multipart({'kind': 'cases', 'subdir': '../../etc'})
+    code, body_resp, _ = http('POST', '/api/admin/upload', raw_body=body,
+                              headers={'Content-Type': 'multipart/form-data; boundary=' + b})
+    assert json.loads(body_resp)['ok'] is False and '不合法' in json.loads(body_resp)['msg']
+
+
+def test_admin_token_protected(platform):
+    """设置 ADMIN_TOKEN 后无口令访问被拒（子进程验证）"""
+    import subprocess as sp
+    env = dict(os.environ, ADMIN_TOKEN='secret123', WEB_PLATFORM_PORT='8098')
+    proc = sp.Popen([sys.executable, 'web_platform/app.py'], cwd=ROOT, env=env,
+                    stdout=sp.DEVNULL, stderr=sp.DEVNULL)
+    try:
+        base2 = 'http://127.0.0.1:8098'
+        import time as _t
+        no_proxy = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+        deadline = _t.time() + 15
+        while _t.time() < deadline:
+            try:
+                no_proxy.open(base2 + '/api/status', timeout=2)
+                break
+            except Exception:
+                _t.sleep(0.3)
+        req = urllib.request.Request(base2 + '/api/admin/files?kind=cases')
+        try:
+            resp = no_proxy.open(req, timeout=5)
+            code = resp.getcode()
+        except urllib.error.HTTPError as e:
+            code = e.code
+        assert code == 401, '无口令应被拒: %s' % code
+        req2 = urllib.request.Request(base2 + '/api/admin/files?kind=cases',
+                                      headers={'X-Admin-Token': 'secret123'})
+        resp2 = no_proxy.open(req2, timeout=5)
+        assert resp2.getcode() == 200
+    finally:
+        proc.terminate()

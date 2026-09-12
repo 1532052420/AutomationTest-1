@@ -69,6 +69,7 @@ function renderSidebar(active) {
     ['/run', '🚀', '执行'],
     ['/report', '📈', '测试报告'],
     ['/debug', '🧪', '代码审查'],
+    ['/admin', '🗂', '管理后台'],
     ['/locator', '🎯', '元素定位器'],
   ];
   sb.innerHTML =

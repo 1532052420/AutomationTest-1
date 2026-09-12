@@ -7,17 +7,26 @@
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-<header>
-  <div class="brand"><a class="back-platform" href="http://127.0.0.1:8080/" title="回到 AppUI 自动化测试平台">🏠<span>平台</span></a> <span class="app-title">🎯 App 元素定位器</span> <span id="app-version" class="ver">v2.6</span> <span class="sub">AutomationTest 框架 · 截图点选 → 一键写进元素库</span>
-    <select id="open-case-sel" class="hdr-select" title="选择用例文件打开编辑"><option value="">📂 打开用例…</option></select>
-    <select id="open-ele-sel" class="hdr-select" title="选择元素定位文件打开编辑"><option value="">🗂 打开元素文件…</option></select>
-    <select id="open-page-sel" class="hdr-select" title="选择页面操作文件打开编辑"><option value="">🧩 打开页面操作…</option></select>
+<aside class="side">
+  <a class="back-platform" href="http://127.0.0.1:8080/">🏠 返回平台</a>
+  <div class="brand">🎯
+    <div class="bt">App 元素定位器
+      <span id="app-version" class="ver">v2.6</span>
+      <small>截图点选 → 一键写进元素库</small>
+    </div>
   </div>
-  <div class="hdr-right">
+  <div class="side-sec">
+    <div class="side-label">📂 快速打开</div>
+    <select id="open-case-sel" class="hdr-select" title="选择用例文件打开编辑"><option value="">打开用例…</option></select>
+    <select id="open-ele-sel" class="hdr-select" title="选择元素定位文件打开编辑"><option value="">打开元素文件…</option></select>
+    <select id="open-page-sel" class="hdr-select" title="选择页面操作文件打开编辑"><option value="">打开页面操作…</option></select>
+  </div>
+  <button id="btn-refresh" class="btn primary side-btn">🔄 刷新</button>
+  <div class="side-foot">
+    <div class="side-label">📱 设备状态</div>
     <span id="dev-info" class="dev-info">未连接</span>
-    <button id="btn-refresh" class="btn primary">🔄 刷新</button>
   </div>
-</header>
+</aside>
 
 <main>
   <!-- 左：设备截图 -->

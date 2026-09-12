@@ -1,36 +1,49 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body {
   font: 14px/1.5 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
-  color: #222; background: #f5f6f8; height: 100vh; display: flex; flex-direction: column;
+  color: #222; background: #f5f6f8; height: 100vh;
+  display: flex; align-items: stretch;
 }
 
-/* ---------- 顶部（自适应：窄屏自动换行，标题/按钮不再被压成竖排） ---------- */
-header {
-  display: flex; align-items: center; justify-content: space-between;
-  flex-wrap: wrap; row-gap: 8px;
-  padding: 10px 16px; background: #1f2937; color: #fff; flex: 0 0 auto;
+/* ---------- 布局：左侧边栏（与测试平台一致）+ 右侧三栏主内容 ---------- */
+.side {
+  width: 200px; flex: 0 0 200px; height: 100vh; position: sticky; top: 0;
+  display: flex; flex-direction: column; gap: 16px;
+  background: #1f2937; color: #e5e7eb; padding: 16px 12px 12px;
 }
-.brand { font-size: 17px; font-weight: 600; display: flex; align-items: center;
-  flex-wrap: wrap; row-gap: 6px; gap: 8px; flex: 1 1 auto; min-width: 0; }
-/* 标题/按钮/下拉：文字不拆行、控件不被压缩，空间不足时整体换行 */
-.app-title { white-space: nowrap; flex: 0 0 auto; }
-.back-platform, .ver, .hdr-right .btn { white-space: nowrap; flex: 0 0 auto; }
-.brand .sub { font-size: 12px; color: #9ca3af; margin-left: 10px; font-weight: 400; }
-/* 左上角回平台 logo */
 .back-platform {
-  display: inline-flex; align-items: center; gap: 4px; font-size: 13px; font-weight: 600;
+  display: flex; align-items: center; justify-content: center; gap: 5px;
+  font-size: 13px; font-weight: 600; text-decoration: none;
   color: #c7d2fe; background: #334155; border: 1px solid #475569; border-radius: 8px;
-  padding: 3px 10px; margin-right: 4px; text-decoration: none; transition: all .15s;
+  padding: 6px 10px; transition: all .15s;
 }
 .back-platform:hover { background: #4338ca; border-color: #6366f1; color: #fff; }
-/* 顶部快速打开：用例 / 元素文件 下拉（深色 header 风格） */
+.brand { display: flex; align-items: flex-start; gap: 8px; font-size: 26px; padding: 0 4px; }
+.brand .bt { display: flex; flex-direction: column; gap: 3px; font-size: 14.5px; font-weight: 600; color: #fff; }
+.brand .bt small { font-size: 11px; color: #9ca3af; font-weight: 400; line-height: 1.5; }
+.ver {
+  font-size: 10.5px; font-weight: 600; color: #a5f3fc; align-self: flex-start;
+  background: #334155; border: 1px solid #475569; border-radius: 4px; padding: 0 6px;
+}
+.side-label { font-size: 11.5px; color: #9ca3af; margin: 0 2px 6px; letter-spacing: .5px; }
+.side-sec { display: flex; flex-direction: column; }
+/* 快速打开下拉：侧栏内通栏 */
 .hdr-select {
   font-size: 12.5px; font-weight: 500; color: #e0e7ff; background: #334155;
-  border: 1px solid #475569; border-radius: 8px; padding: 4px 8px; margin-left: 6px;
-  max-width: 190px; cursor: pointer; outline: none; transition: all .15s;
+  border: 1px solid #475569; border-radius: 8px; padding: 6px 8px; margin: 0 0 8px;
+  width: 100%; cursor: pointer; outline: none; transition: all .15s;
 }
 .hdr-select:hover, .hdr-select:focus { background: #4338ca; border-color: #6366f1; }
 .hdr-select option { color: #1f2937; background: #fff; }
+.side-btn { width: 100%; padding: 9px 12px; font-size: 13.5px; }
+.side-foot {
+  margin-top: auto; padding: 12px 4px 2px; border-top: 1px solid rgba(255,255,255,.12);
+  display: flex; flex-direction: column;
+}
+.side-foot .dev-info { font-size: 12.5px; line-height: 1.6; word-break: break-all; }
+.dev-info { font-size: 13px; color: #d1d5db; }
+.dev-info.ok { color: #34d399; }
+.dev-info.bad { color: #f87171; }
 /* 文件编辑弹窗内容（textarea，可编辑保存） */
 .view-content {
   background: #0f172a; color: #cbd5e1; font: 12px/1.6 "SF Mono", Menlo, Consolas, monospace;
@@ -41,25 +54,9 @@ header {
 .view-content:focus { border-color: #6366f1; }
 #view-status.ok { color: #059669; font-weight: 600; }
 #view-status.bad { color: #dc2626; font-weight: 600; }
-.ver {
-  font-size: 11px; font-weight: 600; color: #a5f3fc;
-  background: #334155; border: 1px solid #475569; border-radius: 4px; padding: 1px 6px;
-}
-.hdr-right { display: flex; align-items: center; gap: 12px; flex: 0 0 auto; }
-.dev-info { font-size: 13px; color: #d1d5db; }
-.dev-info.ok { color: #34d399; }
-.dev-info.bad { color: #f87171; }
 
-/* ---------- 顶部窄屏适配：副标题让位、下拉收窄、刷新不竖排 ---------- */
-@media (max-width: 1280px) {
-  .brand .sub { display: none; }
-  .brand { font-size: 15px; }
-  .hdr-select { max-width: 150px; }
-}
+/* ---------- 窄屏：三栏纵向堆叠（侧栏保持，栏内给固定可视高度） ---------- */
 @media (max-width: 920px) {
-  header { padding: 8px 12px; }
-  .hdr-select { flex: 1 1 130px; max-width: none; }
-  /* 三栏改纵向堆叠，各栏给固定可视高度，横向不再互相挤压 */
   main { flex-direction: column; overflow: auto; }
   .left, .middle, .right { flex: 0 0 auto; }
   .left .shot-wrap { height: 46vh; }

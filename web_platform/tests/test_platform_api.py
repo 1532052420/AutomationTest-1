@@ -184,8 +184,13 @@ def test_exec_defaults(platform):
     assert code == 200
     d = json.loads(body)
     assert d['ok'] and d['defaults']['conf_file']
-    for key in ('udid', 'app_package', 'app_activity', 'server', 'occupied'):
+    for key in ('udid', 'app_package', 'app_activity', 'server', 'occupied',
+                'device_online', 'udid_from_conf'):
         assert key in d['defaults']
+    # 状态真实性：device_online 是布尔实测值；无设备时 udid 可为 conf 预填但必须有标记
+    assert isinstance(d['defaults']['device_online'], bool)
+    if not d['defaults']['device_online']:
+        assert d['defaults']['udid_from_conf'] or not d['defaults']['udid']
     # ?conf= 切换来源
     other = [c for c in d['confs'] if c != d['defaults']['conf_file']]
     if other:

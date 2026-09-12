@@ -283,10 +283,12 @@ async function loadExecDefaults(conf) {
   $('#inUdid').value = d.defaults.udid || '';
   $('#inPackage').value = d.defaults.app_package || '';
   $('#inActivity').value = d.defaults.app_activity || '';
-  // 设备状态卡
+  // 设备状态卡：在线状态以 adb 实测为准（device_online），conf 里的 udid 仅作预填
+  const online = !!d.defaults.device_online;
   $('#devState').innerHTML =
-    '<span class="pill ' + (d.defaults.udid ? 'ok' : 'bad') + '">' + (d.defaults.udid ? '● 设备在线' : '● 无在线设备') + '</span>' +
-    '<span>设备 <b>' + esc(d.defaults.udid || '-') + '</b></span>' +
+    '<span class="pill ' + (online ? 'ok' : 'bad') + '">' + (online ? '● 设备在线' : '● 未检测到在线设备') + '</span>' +
+    '<span>设备 <b>' + esc(d.defaults.udid || '-') + '</b>' +
+    (!online && d.defaults.udid ? ' <span class="muted" style="font-size:12px">(conf 预填，未连接)</span>' : '') + '</span>' +
     '<span>型号 <b>' + esc(d.defaults.model || '-') + '</b></span>' +
     '<span>Appium <b>' + (d.defaults.appium_ok ? '<span style="color:#4ade80">正常</span>' : '<span style="color:#ff8787">不可用</span>') + '</b></span>' +
     '<span>服务 <b>' + esc(d.defaults.server || '-') + '</b></span>' +

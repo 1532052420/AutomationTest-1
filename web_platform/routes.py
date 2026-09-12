@@ -184,9 +184,11 @@ def api_exec_defaults():
     confs = list_devices_conf_files()
     conf_file = request.args.get('conf') or (confs[0] if confs else '')
     defaults = {'conf_file': conf_file, 'udid': '', 'model': '', 'app_package': '',
-                'app_activity': '', 'server': '', 'appium_ok': False, 'occupied': False}
+                'app_activity': '', 'server': '', 'appium_ok': False, 'occupied': False,
+                'device_online': False, 'udid_from_conf': False}
     adb = adb_devices()
     online = [d for d in adb['devices'] if d['state'] == 'device']
+    defaults['device_online'] = bool(online)
     if online:
         defaults['udid'] = online[0]['udid']
         defaults['model'] = online[0]['model']
@@ -198,7 +200,9 @@ def api_exec_defaults():
         defaults['app_activity'] = caps.get('appActivity', '')
         defaults['server'] = '%s:%s' % (d['server_ip'], d['server_port'])
         if not defaults['udid']:
+            # 无在线设备时用 conf 里的 udid 预填输入框（仅作为默认值，不代表在线）
             defaults['udid'] = caps.get('udid', '')
+            defaults['udid_from_conf'] = bool(defaults['udid'])
         defaults['appium_ok'], _ = check_appium(d['server_ip'], d['server_port'])
     running = runner.manager.running_task()
     defaults['occupied'] = bool(running)

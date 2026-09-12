@@ -38,6 +38,12 @@
     fab.addEventListener('click', toggle);
     document.body.appendChild(fab);
     apply(current());
+    // 首屏按已存主题直接渲染（不动画）；首帧之后开启过渡，点击切换时颜色平滑渐变
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () {
+        document.documentElement.classList.add('theme-anim');
+      });
+    });
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);

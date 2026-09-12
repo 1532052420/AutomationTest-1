@@ -12,6 +12,14 @@
   --card-shadow-hover: 0 2px 12px rgba(0,0,0,.4);
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
+
+/* 主题切换渐变：颜色平滑过渡不闪眼（theme.js 首帧后才加 theme-anim，避免载入时动画） */
+@media (prefers-reduced-motion: no-preference) {
+  html.theme-anim *, html.theme-anim *::before, html.theme-anim *::after {
+    transition: background-color .55s ease, color .55s ease, border-color .55s ease,
+                fill .5s ease, stroke .5s ease, box-shadow .55s ease;
+  }
+}
 html, body { height: 100%; color-scheme: dark; }
 body {
   font: 14px/1.65 -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;

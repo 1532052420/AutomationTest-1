@@ -22,3 +22,6 @@ package-lock.json
 .DS_Store
 .zcode/
 gui-test-screenshots/
+
+# Appium 三件套（APK 二进制不入库）
+三件套/

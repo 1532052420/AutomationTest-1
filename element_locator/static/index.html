@@ -56,7 +56,7 @@
     <div id="tree" class="tree"></div>
     <div id="detail" class="detail" style="display:none">
       <div class="detail-head">选中元素 <span class="hint">双击截图可直达设备点击</span>
-        <span class="head-btns"><button id="btn-tap" class="btn small primary">▶ 设备上点击</button> <button id="btn-add" class="btn small primary">➕ 添加到元素库</button> <button id="btn-case" class="btn small">📝 用例工作台</button></span>
+        <span class="head-btns"><button id="btn-tap" class="btn small primary">▶ 设备上点击</button> <button id="btn-add" class="btn small primary">➕ 添加到元素库</button></span>
       </div>
       <div id="tap-tip" class="tap-tip"></div>
       <div id="hit-cands" class="hit-cands"></div>
@@ -125,7 +125,7 @@
         <!-- 第二栏：用例 -->
         <section class="flow-col" id="col-case">
           <div class="col-head">② 用例 <span class="hint">这步操作追加到哪条用例</span></div>
-          <label>目标用例文件 <span class="help-icon" data-help="操作代码行追加到哪个用例文件（test_*.py）。下拉列出现有用例文件；还没有的话先到「📝 用例工作台」创建——③依赖那里生成的页面对象。">?</span>
+          <label>目标用例文件 <span class="help-icon" data-help="操作代码行追加到哪个用例文件（test_*.py）。下拉列出现有用例文件；还没有的话可在测试平台管理后台上传，或在 cases/app_ui/android/demoProject/ 下按框架格式创建——③需要该用例已有页面对象才能联动。">?</span>
             <select id="el-case-file"></select>
           </label>
           <label>目标方法 <span class="help-icon" data-help="追加到用例文件里的哪个测试方法（def test_xxx）体末尾，不影响已有步骤。">?</span>
@@ -263,6 +263,6 @@
 <!-- 字段帮助气泡（点击问号显示） -->
 <div id="help-tip" class="help-tip" style="display:none"></div>
 
-<script src="/static/index.js?v=23"></script>
+<script src="/static/index.js?v=24"></script>
 </body>
 </html>

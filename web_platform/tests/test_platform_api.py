@@ -399,42 +399,6 @@ def _run_tool(tool, params):
     return code, json.loads(body)
 
 
-def test_tool_po_generate_and_save(platform):
-    import re as _re
-    params = {'page_class': 'DbgToolTestPage', 'page_desc': '调试套件测试页',
-              'elements': [{'name': 'btn_ok', 'desc': '确认', 'action': 'click',
-                            'locator_type': 'ID', 'locator_value': 'com.app:id/ok',
-                            'wait_type': 'VISIBILITY_OF'}]}
-    code, d = _run_tool('po_generate', params)
-    data = d['result']['data']
-    assert data['page_class'] == 'DbgToolTestPage' and 'class DbgToolTestPage' in data['page_code']
-    assert 'class DbgToolTestElements' in data['elements_code']
-    # 保存 → 文件落盘 → 再保存（未勾选覆盖）应被拒 → 勾选后成功 → 清理
-    code, d = _run_tool('po_save', params)
-    assert d['result']['ok'] and len(d['result']['data']['written']) == 2
-    page_path = os.path.join(ROOT, data['page_path'])
-    elem_path = os.path.join(ROOT, data['elements_path'])
-    assert os.path.isfile(page_path) and os.path.isfile(elem_path)
-    code, d = _run_tool('po_save', params)
-    assert d['result']['ok'] is False and '覆盖' in d['result']['msg']
-    params['force'] = True
-    code, d = _run_tool('po_save', params)
-    assert d['result']['ok']
-    os.remove(page_path); os.remove(elem_path)
-
-
-def test_tool_po_validation(platform):
-    code, d = _run_tool('po_generate', {'page_class': 'bad_name', 'elements': []})
-    assert d['result']['ok'] is False and '大驼峰' in d['result']['msg']
-    code, d = _run_tool('po_generate', {'page_class': 'GoodPage', 'elements': []})
-    assert d['result']['ok'] is False and '至少定义一个元素' in d['result']['msg']
-
-
-def test_tool_bad_name(platform):
-    code, body, _ = http('POST', '/api/debug/tool', {'tool': 'rm -rf', 'params': {}})
-    assert code == 400
-
-# ---------------------------------------------------------------- 框架自动识别
 def test_debug_functions_catalog(platform):
     """方法目录自动识别：覆盖框架文件，新增/删除文件后清单自动增减"""
     code, body, _ = http('GET', '/api/debug/functions', timeout=60)
@@ -454,92 +418,6 @@ def test_debug_functions_catalog(platform):
     assert any(f.startswith('cases/') for f in files)
 
 
-def test_debug_call_real_method(platform):
-    """方法调试：真实调用框架方法并返回结果"""
-    code, body, _ = http('POST', '/api/debug/tool', {
-        'tool': '__call__',
-        'params': {'target': 'common.dateTimeTool::DateTimeTool.strToTimeStamp',
-                   'args': {'str': '2026-01-02 03:04:05'}}}, timeout=60)
-    d = json.loads(body)
-    assert d['result']['ok']
-    ret = d['result']['data']['return']
-    assert ret['kind'] == 'json' and isinstance(ret['value'], int) and ret['value'] > 1767196800
-    assert 'duration_ms' in d['result']['data']
-
-    code, body, _ = http('POST', '/api/debug/tool', {
-        'tool': '__call__',
-        'params': {'target': 'common.strTool::StrTool.getStringWithLBRB',
-                   'args': {'sourceStr': 'a<x>b', 'lbStr': '<', 'rbStr': '>'}}}, timeout=60)
-    ret = json.loads(body)['result']['data']['return']
-    assert ret['value'] == 'x'
-
-
-def test_debug_call_error_paths(platform):
-    """方法调试错误路径：缺必填参数/未知参数/不可实例化给明确提示"""
-    code, body, _ = http('POST', '/api/debug/tool', {
-        'tool': '__call__',
-        'params': {'target': 'common.strTool::StrTool.getStringWithLBRB',
-                   'args': {'sourceStr': 'a<x>b'}}}, timeout=60)
-    d = json.loads(body)
-    assert d['result']['ok'] is False and '缺少必填参数' in d['result']['msg']
-    code, body, _ = http('POST', '/api/debug/tool', {
-        'tool': '__call__',
-        'params': {'target': 'common.strTool::StrTool.getStringWithLBRB',
-                   'args': {'sourceStr': 'a', 'lbStr': '<', 'rbStr': '>', 'bogus': 1}}}, timeout=60)
-    assert '未知参数' in json.loads(body)['result']['msg']
-    code, body, _ = http('POST', '/api/debug/tool', {
-        'tool': '__call__',
-        'params': {'target': 'common.appium.appOperator::AppOperator.click',
-                   'args': {'element': 'x'}}}, timeout=60)
-    d = json.loads(body)
-    assert d['result']['ok'] is False and '构造' in d['result']['msg']
-
-def test_tool_text_assert(platform):
-    code, d = _run_tool('text_assert', {'source': '订单金额：123.45 元', 'pattern': '金额：([0-9.]+)'})
-    assert code == 200 and d['result']['ok']
-    data = d['result']['data']
-    assert data['matched'] and data['groups'] == ['123.45'] and data['hamcrest_is_match_by_regexp'] is True
-
-
-def test_tool_element_build(platform):
-    code, d = _run_tool('element_build', {'locator_type': 'ID', 'locator_value': 'com.app:id/btn',
-                                          'wait_type': 'VISIBILITY_OF', 'wait_seconds': 10})
-    data = d['result']['data']
-    assert d['result']['ok'] and data['wait_seconds'] == 10
-    assert "Locator_Type.ID" in data['code'] and 'Wait_By.VISIBILITY_OF' in data['code']
-    code, d = _run_tool('element_build', {'locator_type': 'BAD', 'locator_value': 'x'})
-    assert d['result']['ok'] is False and '不合法' in d['result']['msg']
-
-
-def test_tool_http_request_local(platform):
-    """HTTP 调试工具走本地临时服务（不依赖外网）"""
-    import threading
-    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-
-    class H(BaseHTTPRequestHandler):
-        def log_message(self, *a):
-            pass
-
-        def do_GET(self):
-            body = json.dumps({'ok': True, 'q': self.path}).encode()
-            self.send_response(200)
-            self.send_header('Content-Type', 'application/json')
-            self.send_header('Content-Length', str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
-
-    srv = ThreadingHTTPServer(('127.0.0.1', 0), H)
-    threading.Thread(target=srv.serve_forever, daemon=True).start()
-    try:
-        code, d = _run_tool('http_request', {
-            'url': 'http://127.0.0.1:%d/ping?x=1' % srv.server_address[1], 'method': 'get'})
-        data = d['result']['data']
-        assert d['result']['ok'] and data['status_code'] == 200 and json.loads(data['body'])['ok'] is True
-    finally:
-        srv.shutdown()
-        srv.server_close()
-
-# ---------------------------------------------------------------- 元素定位器智能启动
 def test_locator_smart_start(platform):
     """点击即启动：未运行则拉起并等就绪；已运行直接复用（TC-076）"""
     code, body, _ = http('POST', '/api/locator/start', {}, timeout=60)

@@ -14,8 +14,6 @@ let DBG_RECORD = null;   // 正在查看的历史记录
 let DBG_RUNNING = false;
 let REC_PAGE = 1;
 let DBG_VIEW = 'overview';
-let DBG_TOOL = 'methods';
-let PO_ROWS = [];        // 新增 PO 的元素行
 
 /* ---------------- 模块（文件夹）元数据 ---------------- */
 const MODULE_META = {
@@ -59,7 +57,7 @@ function dbgStatusOf(id) {
 /* ================= 视图切换 ================= */
 function dbgShowView(view) {
   DBG_VIEW = view;
-  ['overview', 'tools', 'records'].forEach(v => {
+  ['overview', 'records'].forEach(v => {
     const sec = $('#view-' + v);
     if (sec) sec.style.display = (v === view) ? '' : 'none';
   });
@@ -289,344 +287,6 @@ function dbgShowBanner(record) {
   $('#btnBackLive').addEventListener('click', dbgBackToLive);
 }
 
-const LOCATOR_TYPES = ['ID', 'XPATH', 'CLASS_NAME', 'ACCESSIBILITY_ID', 'ANDROID_UIAUTOMATOR', 'ANDROID_VIEWTAG',
-  'ANDROID_DATA_MATCHER', 'CSS_SELECTOR', 'LINK_TEXT', 'PARTIAL_LINK_TEXT', 'TAG_NAME', 'NAME', 'IMAGE',
-  'IOS_CLASS_CHAIN', 'IOS_PREDICATE', 'IOS_UIAUTOMATION'];
-const WAIT_TYPES = ['', 'VISIBILITY_OF', 'PRESENCE_OF_ELEMENT_LOCATED', 'ELEMENT_TO_BE_CLICKABLE',
-  'ELEMENT_LOCATED_TO_BE_SELECTED', 'TITLE_IS', 'TITLE_CONTAINS'];
-
-/* ================= 方法调试（调试对象 = 框架真实方法，目录自动识别） ================= */
-let DBG_FUNCS_FLAT = [];   // [{target,file,cls,name,kind,params,ctor_params,instantiable,doc}]
-let DBG_CALL_TARGET = null;
-
-function dbgBuildFuncIndex() {
-  DBG_FUNCS_FLAT = [];
-  (DBG_FUNCS || []).forEach(f => {
-    (f.entries || []).forEach(e => DBG_FUNCS_FLAT.push(Object.assign({}, e, {file: f.file})));
-  });
-}
-
-function dbgRenderToolTabs() {
-  const tabs = [
-    ['methods', '🔎 方法调试'],
-    ['http_request', '🌐 HTTP 请求'],
-    ['text_assert', '🔤 文本断言'],
-    ['element_build', '🎯 元素调试'],
-    ['po', '📄 新增 PO'],
-  ];
-  $('#toolTabs').innerHTML = tabs.map(([k, label]) =>
-    '<button class="ttab2' + (DBG_TOOL === k ? ' on' : '') + '" data-tool="' + k + '">' + label + '</button>').join('');
-}
-
-function dbgRenderToolForm() {
-  if (DBG_TOOL === 'po') { dbgRenderPoForm(); return; }
-  if (DBG_TOOL !== 'methods') { dbgRenderLegacyToolForm(); return; }
-  $('#toolForm').innerHTML =
-    '<div class="field" style="max-width:420px;margin-bottom:10px"><label>搜索方法（目标 / 文档）</label>' +
-    '<input type="text" id="methodSearch" placeholder="strTool / DateTimeTool / toast / doRequest…"></div>' +
-    '<div class="mdebug"><div id="methodTree" class="mtree"></div>' +
-    '<div id="callPane" style="flex:1;min-width:0"></div></div>';
-  $('#methodSearch').addEventListener('input', dbgRenderMethodTree);
-  $('#methodTree').addEventListener('click', (e) => {
-    const item = e.target.closest('.mtree-item');
-    if (!item) return;
-    DBG_CALL_TARGET = item.dataset.target;
-    dbgRenderMethodTree();
-    dbgRenderCallForm();
-  });
-  dbgRenderMethodTree();
-  $('#callPane').innerHTML = '<p class="muted">左侧选择一个框架方法（目录由框架文件自动识别）。</p>';
-}
-
-function dbgRenderMethodTree() {
-  const q = (($('#methodSearch') || {}).value || '').trim().toLowerCase();
-  const byFile = {};
-  DBG_FUNCS_FLAT
-    .filter(m => !q || m.target.toLowerCase().includes(q) || (m.doc || '').toLowerCase().includes(q))
-    .forEach(m => (byFile[m.file] = byFile[m.file] || []).push(m));
-  const files = Object.keys(byFile).sort();
-  $('#methodTree').innerHTML = files.map(f =>
-    '<div class="mtree-file">' + esc(f) + '</div>' +
-    byFile[f].map(m =>
-      '<div class="mtree-item' + (DBG_CALL_TARGET === m.target ? ' on' : '') + '" data-target="' + esc(m.target) + '" title="' + esc(m.doc) + '">' +
-      '<b>' + esc(m.cls ? m.cls + '.' + m.name : m.name) + '</b>' +
-      '<span class="muted">' + esc('(' + m.params.map(p => p.name + (p.required ? '' : '?')).join(', ') + ')') + '</span></div>').join('')
-  ).join('') || '<p class="muted">无匹配方法</p>';
-}
-
-function dbgRenderCallForm() {
-  const m = DBG_FUNCS_FLAT.find(x => x.target === DBG_CALL_TARGET);
-  const pane = $('#callPane');
-  if (!m) { pane.innerHTML = '<p class="muted">方法不存在</p>'; return; }
-  const notInstantiable = !m.instantiable && m.ctor_params.length > 0;
-  const ctorHtml = (m.ctor_params.length && m.instantiable)
-    ? '<h4>构造参数（用于创建实例）</h4><div class="fields">' + m.ctor_params.map(p => dbgParamField('ctor', p)).join('') + '</div>'
-    : '';
-  const warn = notInstantiable
-    ? '<p class="num-bad">⚠ 该类构造需要运行时对象（' + m.ctor_params.map(p => p.name).join(', ') +
-      '），无法脱离设备 / 服务调试，运行会得到明确报错</p>'
-    : '';
-  pane.innerHTML = '<h4 class="muted" style="margin-top:0">' + esc(m.target) + '</h4>' +
-    (m.doc ? '<p class="muted">' + esc(m.doc) + '</p>' : '') +
-    '<p class="muted" style="font-size:12px">类型: ' + esc(m.kind) + (notInstantiable ? ' · 不可自动实例化' : '') + '</p>' +
-    warn + ctorHtml +
-    '<h4>方法参数' + (m.params.length ? '' : '（无）') + '</h4>' +
-    (m.params.length ? '<div class="fields">' + m.params.map(p => dbgParamField('arg', p)).join('') + '</div>' : '') +
-    '<div class="mt"><button id="btnCallRun"' + (notInstantiable ? '' : '') + '>▶ 运行调试</button></div>' +
-    '<div id="callResult" class="mt"></div>';
-  $('#btnCallRun').addEventListener('click', dbgRunCall);
-}
-
-function dbgParamField(prefix, p) {
-  const ph = p.required ? '必填' : ('留空 = 默认 ' + (p.default === null ? '无' : p.default));
-  return '<div class="field"><label>' + esc(p.name) + (p.required ? ' <b class="num-bad">*</b>' : '') +
-    (p.annotation ? ' <span class="muted">(' + esc(p.annotation) + ')</span>' : '') + '</label>' +
-    '<input type="text" data-prefix="' + prefix + '" data-name="' + esc(p.name) + '" placeholder="' + esc(ph) + '"></div>';
-}
-
-async function dbgRunCall() {
-  const ctor_args = {}, args = {};
-  document.querySelectorAll('#callPane input[data-name]').forEach(el => {
-    const v = el.value.trim();
-    if (el.dataset.prefix === 'ctor') ctor_args[el.dataset.name] = v;
-    else args[el.dataset.name] = v;
-  });
-  const btn = $('#btnCallRun');
-  btn.disabled = true; btn.textContent = '⏳ 运行中…';
-  $('#callResult').innerHTML = '<p class="muted">运行中…</p>';
-  try {
-    const d = await postJson('/api/debug/tool',
-      {tool: '__call__', params: {target: DBG_CALL_TARGET, ctor_args: ctor_args, args: args}});
-    if (!d.ok) { $('#callResult').innerHTML = '<div class="err">✗ ' + esc(d.msg || '执行失败') + '</div>'; return; }
-    const r = d.result;
-    if (!r.ok) {
-      $('#callResult').innerHTML = '<div class="err">✗ ' + esc(r.msg || '执行失败') + '</div>' +
-        (r.traceback ? '<pre class="codebox">' + esc(r.traceback) + '</pre>' : '');
-      return;
-    }
-    const data = r.data;
-    const ret = data.return;
-    const valHtml = ret.kind === 'json'
-      ? '<pre class="codebox">' + esc(JSON.stringify(ret.value, null, 2)) + '</pre>'
-      : '<pre class="codebox">' + esc(ret.value) + '</pre>';
-    $('#callResult').innerHTML =
-      '<div class="meta"><span>返回类型 <b>' + esc(ret.type) + '</b></span><span>耗时 <b>' + data.duration_ms + 'ms</b></span></div>' +
-      '<h4>返回值</h4>' + valHtml +
-      (data.stdout ? '<h4>方法内部输出 (stdout)</h4><pre class="codebox">' + esc(data.stdout) + '</pre>' : '');
-  } catch (e) {
-    $('#callResult').innerHTML = '<div class="err">✗ 请求异常: ' + esc(String(e)) + '</div>';
-  } finally {
-    btn.disabled = false; btn.textContent = '▶ 运行调试';
-  }
-}
-
-/* ---------------- 固定字段调试工具（HTTP / 文本断言 / 元素调试） ---------------- */
-const DBG_TOOLS = {
-  http_request: {name: '🌐 HTTP 请求', fields: [
-    {k: 'url', label: '完整 URL', type: 'text', ph: 'https://example.com/api?q=1', required: true},
-    {k: 'method', label: '请求方式', type: 'select', options: ['get', 'post_form', 'put'], def: 'get'},
-    {k: 'params', label: '参数（JSON 对象，可空）', type: 'textarea', ph: '{"wd": "apitest"}'},
-    {k: 'headers', label: '请求头（JSON 对象，可空）', type: 'textarea', ph: '{"X-Debug": "1"}'},
-    {k: 'timeout', label: '超时秒数（1-45）', type: 'text', def: '20'},
-  ]},
-  text_assert: {name: '🔤 文本断言', fields: [
-    {k: 'source', label: '被检文本', type: 'textarea', ph: '订单金额：123.45 元', required: true},
-    {k: 'pattern', label: '正则表达式', type: 'text', ph: '金额：([0-9.]+)', required: true},
-  ]},
-  element_build: {name: '🎯 元素调试', fields: [
-    {k: 'locator_type', label: '定位方式', type: 'select', options: LOCATOR_TYPES, def: 'ID'},
-    {k: 'locator_value', label: '定位值', type: 'text', ph: 'com.app:id/btn', required: true},
-    {k: 'expected_value', label: '期望值（可选）', type: 'text'},
-    {k: 'wait_type', label: '等待类型（可选）', type: 'select', options: WAIT_TYPES},
-    {k: 'wait_seconds', label: '等待秒数（可选）', type: 'text', ph: '10'},
-  ]},
-};
-
-function dbgRenderLegacyToolForm() {
-  const t = DBG_TOOLS[DBG_TOOL];
-  $('#toolForm').innerHTML = '<div class="fields">' +
-    t.fields.map(f => {
-      const ph = f.ph ? ' placeholder="' + esc(f.ph) + '"' : '';
-      const def = f.def ? ' value="' + esc(f.def) + '"' : '';
-      if (f.type === 'textarea') return '<div class="field" style="grid-column:1/-1"><label>' + esc(f.label) + '</label><textarea id="tf-' + f.k + '" rows="3"' + ph + '></textarea></div>';
-      if (f.type === 'select') return '<div class="field"><label>' + esc(f.label) + '</label><select id="tf-' + f.k + '">' +
-        f.options.map(o => '<option value="' + esc(o) + '"' + (o === f.def ? ' selected' : '') + '>' + (o || '（不等待）') + '</option>').join('') + '</select></div>';
-      return '<div class="field"><label>' + esc(f.label) + '</label><input type="text" id="tf-' + f.k + '"' + ph + def + '></div>';
-    }).join('') + '</div>' +
-    '<div class="mt"><button id="btnToolRun">▶ 运行调试</button></div>';
-  $('#btnToolRun').addEventListener('click', dbgRunTool);
-  $('#toolResult').innerHTML = '<p class="muted">填写参数后运行，结果展示在这里。</p>';
-}
-
-function dbgCollectToolParams() {
-  const t = DBG_TOOLS[DBG_TOOL];
-  const params = {};
-  t.fields.forEach(f => {
-    const el = $('#tf-' + f.k);
-    if (!el) return;
-    params[f.k] = el.value.trim();
-  });
-  if (DBG_TOOL === 'http_request') {
-    ['params', 'headers'].forEach(k => {
-      if (params[k]) {
-        try { params[k] = JSON.parse(params[k]); }
-        catch (e) { throw new Error(k + ' 不是合法 JSON: ' + e.message); }
-      } else delete params[k];
-    });
-  }
-  return params;
-}
-
-async function dbgRunTool() {
-  const btn = $('#btnToolRun');
-  let params;
-  try { params = dbgCollectToolParams(); }
-  catch (e) { return toast(e.message, false); }
-  btn.disabled = true; btn.textContent = '⏳ 运行中…';
-  $('#toolResult').innerHTML = '<p class="muted">运行中…</p>';
-  try {
-    const d = await postJson('/api/debug/tool', {tool: DBG_TOOL, params: params});
-    if (!d.ok) { $('#toolResult').innerHTML = '<div class="err">✗ ' + esc(d.msg || '执行失败') + '</div>'; return; }
-    const r = d.result;
-    if (!r.ok) { $('#toolResult').innerHTML = '<div class="err">✗ ' + esc(r.msg || '执行失败') + '</div>'; return; }
-    dbgRenderToolResult(r.data);
-  } catch (e) {
-    $('#toolResult').innerHTML = '<div class="err">✗ 请求异常: ' + esc(String(e)) + '</div>';
-  } finally {
-    btn.disabled = false; btn.textContent = '▶ 运行调试';
-  }
-}
-
-function dbgRenderToolResult(data) {
-  if (DBG_TOOL === 'http_request') {
-    $('#toolResult').innerHTML =
-      '<div class="meta"><span>状态码 <b class="' + (data.status_code === 200 ? 'num-ok' : 'num-bad') + '">' + data.status_code + '</b></span>' +
-      '<span>响应长度 <b>' + data.body_length + '</b></span></div>' +
-      '<h4>响应体</h4><pre class="codebox">' + esc(data.body) + '</pre>' +
-      '<h4 class="mt muted">请求回显</h4><pre class="codebox">' + esc(JSON.stringify(data.request, null, 2)) + '</pre>';
-  } else if (DBG_TOOL === 'text_assert') {
-    $('#toolResult').innerHTML =
-      '<div class="meta"><span>匹配 <b class="' + (data.matched ? 'num-ok' : 'num-bad') + '">' + (data.matched ? '成功' : '失败') + '</b></span>' +
-      '<span>匹配到 <b>' + data.match_count + '</b> 处</span>' +
-      '<span>AssertTool: <b>' + data.assertTool_isRegularMatch + '</b></span>' +
-      '<span>hamcrest: <b>' + data.hamcrest_is_match_by_regexp + '</b></span></div>' +
-      '<h4>匹配内容</h4><pre class="codebox">' + esc(JSON.stringify({first: data.match_text, groups: data.groups, all: data.all_matches}, null, 2)) + '</pre>';
-  } else if (DBG_TOOL === 'element_build') {
-    $('#toolResult').innerHTML =
-      '<h4>ElementInfo 数据</h4><pre class="codebox">' + esc(JSON.stringify(data, null, 2)) + '</pre>' +
-      '<p class="muted">可直接粘贴到元素仓库文件中的写法：</p><pre class="codebox">' + esc(data.code) + '</pre>';
-  }
-}
-
-/* ---------------- 新增 PO ---------------- */
-function dbgRenderPoForm() {
-  const ltOptions = LOCATOR_TYPES.map(t => '<option>' + t + '</option>').join('');
-  const wtOptions = ['', 'VISIBILITY_OF', 'PRESENCE_OF_ELEMENT_LOCATED', 'ELEMENT_TO_BE_CLICKABLE',
-    'ELEMENT_LOCATED_TO_BE_SELECTED', 'TITLE_IS', 'TITLE_CONTAINS'].map(t => '<option value="' + t + '">' + (t || '（不等待）') + '</option>').join('');
-  $('#toolForm').innerHTML =
-    '<div class="fields">' +
-    '<div class="field"><label>页面类名（大驼峰，建议 Page 结尾）</label><input type="text" id="po-class" placeholder="KuaigeLoginPage"></div>' +
-    '<div class="field"><label>页面说明</label><input type="text" id="po-desc" placeholder="快歌 App 登录页"></div>' +
-    '</div>' +
-    '<div class="mt"><b>元素定义</b> <button class="ghost mini" id="poAdd">＋ 添加元素</button>' +
-    '<label class="muted" style="margin-left:12px"><input type="checkbox" id="po-force"> 覆盖已存在文件</label></div>' +
-    '<div class="tblwrap mt"><table><thead><tr><th>元素名</th><th>说明</th><th>页面操作</th><th>定位方式</th><th>定位值</th><th>等待</th><th></th></tr></thead><tbody id="poRows"></tbody></table></div>' +
-    '<div class="mt"><button id="btnPoGen">⚡ 生成代码预览</button> <button id="btnPoSave" class="ghost">💾 保存到框架</button></div>' +
-    '<div id="poResult"></div>';
-  $('#poAdd').addEventListener('click', () => { PO_ROWS.push({}); dbgRenderPoRows(); });
-  $('#btnPoGen').addEventListener('click', () => dbgPoSubmit('po_generate'));
-  $('#btnPoSave').addEventListener('click', () => dbgPoSubmit('po_save'));
-  if (!PO_ROWS.length) PO_ROWS.push({});
-  dbgRenderPoRows();
-  $('#poResult').innerHTML = '';
-}
-
-function dbgRenderPoRows() {
-  const ltOptions = LOCATOR_TYPES.map(t => '<option value="' + t + '">' + t + '</option>').join('');
-  const wtOptions = ['', 'VISIBILITY_OF', 'PRESENCE_OF_ELEMENT_LOCATED', 'ELEMENT_TO_BE_CLICKABLE',
-    'ELEMENT_LOCATED_TO_BE_SELECTED', 'TITLE_IS', 'TITLE_CONTAINS']
-    .map(t => '<option value="' + t + '">' + (t || '（不等待）') + '</option>').join('');
-  $('#poRows').innerHTML = PO_ROWS.map((row, i) =>
-    '<tr>' +
-    '<td><input type="text" data-pk="name" data-i="' + i + '" placeholder="btn_login" value="' + esc(row.name || '') + '"></td>' +
-    '<td><input type="text" data-pk="desc" data-i="' + i + '" placeholder="登录按钮" value="' + esc(row.desc || '') + '"></td>' +
-    '<td><select data-pk="action" data-i="' + i + '">' +
-    ['click', 'input', 'check', 'read'].map(a => '<option' + (row.action === a ? ' selected' : '') + '>' + a + '</option>').join('') +
-    '</select></td>' +
-    '<td><select data-pk="locator_type" data-i="' + i + '">' + ltOptions + '</select></td>' +
-    '<td><input type="text" data-pk="locator_value" data-i="' + i + '" placeholder="com.app:id/btn" value="' + esc(row.locator_value || '') + '"></td>' +
-    '<td><select data-pk="wait_type" data-i="' + i + '">' + wtOptions + '</select></td>' +
-    '<td><button class="mini danger-ghost po-del" data-i="' + i + '">✕</button></td></tr>').join('');
-  document.querySelectorAll('#poRows [data-pk]').forEach(el => {
-    el.addEventListener('change', () => {
-      PO_ROWS[+el.dataset.i][el.dataset.pk] = (el.tagName === 'SELECT' ? el.value : el.value.trim());
-    });
-  });
-  document.querySelectorAll('#poRows .po-del').forEach(el => {
-    el.addEventListener('click', () => { PO_ROWS.splice(+el.dataset.i, 1); dbgRenderPoRows(); });
-  });
-  PO_ROWS.forEach((row, i) => {
-    ['action', 'locator_type', 'wait_type'].forEach(k => {
-      if (row[k]) { const el = document.querySelector('#poRows [data-pk="' + k + '"][data-i="' + i + '"]'); if (el) el.value = row[k]; }
-    });
-  });
-}
-
-function dbgCollectPo() {
-  const po = {
-    page_class: $('#po-class').value.trim(),
-    page_desc: $('#po-desc').value.trim(),
-    elements: PO_ROWS.map(r => ({...r})),
-    force: $('#po-force') && $('#po-force').checked,
-  };
-  if (DBG_LAST_PO && DBG_TOOL_LAST_RESULT && po.page_class === DBG_TOOL_LAST_RESULT.page_class) {
-    po.page_class = po.page_class || DBG_TOOL_LAST_RESULT.page_class;
-  }
-  return po;
-}
-
-let DBG_TOOL_LAST_RESULT = null, DBG_LAST_PO = null;
-
-async function dbgPoSubmit(mode) {
-  const po = {
-    page_class: $('#po-class').value.trim(),
-    page_desc: $('#po-desc').value.trim(),
-    elements: PO_ROWS.map(r => ({...r})),
-    force: $('#po-force') && $('#po-force').checked,
-  };
-  if (mode === 'po_save' && DBG_LAST_PO) {
-    po.page_class = po.page_class || DBG_LAST_PO.page_class;
-    po.page_desc = po.page_desc || DBG_LAST_PO.page_desc;
-    po.elements = po.elements.some(e => e.locator_value) ? po.elements : DBG_LAST_PO.elements;
-  }
-  const btn = mode === 'po_save' ? $('#btnPoSave') : $('#btnPoGen');
-  btn.disabled = true;
-  $('#poResult').innerHTML = '<p class="muted">处理中…</p>';
-  try {
-    const d = await postJson('/api/debug/tool', {tool: mode, params: po});
-    if (!d.ok) { $('#poResult').innerHTML = '<div class="err">✗ ' + esc(d.msg || '') + '</div>'; return; }
-    const r = d.result;
-    if (!r.ok) { $('#poResult').innerHTML = '<div class="err">✗ ' + esc(r.msg || '') + '</div>'; return; }
-    if (mode === 'po_generate') {
-      DBG_LAST_PO = po;
-      const warn = (p, exists) => exists ? '<span class="num-bad">⚠ 文件已存在，保存需勾选覆盖</span>' : '<span class="num-ok">新文件</span>';
-      $('#poResult').innerHTML =
-        '<p>' + warn('', r.data.elements_exists) + ' → <b>' + esc(r.data.elements_path) + '</b>　' +
-        warn('', r.data.page_exists) + ' → <b>' + esc(r.data.page_path) + '</b></p>' +
-        '<h4>' + esc(r.data.elements_class) + '（元素仓库）</h4><pre class="codebox">' + esc(r.data.elements_code) + '</pre>' +
-        '<h4>' + esc(r.data.page_class) + '（页面对象）</h4><pre class="codebox">' + esc(r.data.page_code) + '</pre>';
-    } else {
-      $('#poResult').innerHTML = '<div class="meta"><span class="num-ok">✓ ' + esc(r.data.msg || '已保存') + '</span>' +
-        '<span>' + esc((r.data.written || []).join('、')) + '</span></div>';
-      toast(r.data.msg || '已保存', true);
-    }
-  } catch (e) {
-    $('#poResult').innerHTML = '<div class="err">✗ 请求异常: ' + esc(String(e)) + '</div>';
-  } finally {
-    btn.disabled = false;
-  }
-}
-
 /* ---------------- 初始化 ---------------- */
 async function dbgInit() {
   renderSidebar('/debug');
@@ -640,10 +300,7 @@ async function dbgInit() {
     const f = await api('/api/debug/functions');
     if (f.ok) DBG_FUNCS = f.files || [];
   } catch (e) { /* 目录加载失败不影响检查项 */ }
-  dbgBuildFuncIndex();
   dbgRender();
-  dbgRenderToolTabs();
-  dbgRenderToolForm();
 
   $('#btnRunAll').addEventListener('click', dbgRunAll);
   $('#btnReload').addEventListener('click', () => location.reload());
@@ -680,14 +337,9 @@ async function dbgInit() {
         toast('已复制：' + text);
       });
   });
-  $('#toolTabs').addEventListener('click', (e) => {
-    const b = e.target.closest('.ttab2');
-    if (!b) return;
-    DBG_TOOL = b.dataset.tool;
-    dbgRenderToolTabs();
-    dbgRenderToolForm();
-  });
-  $('#recList').addEventListener('click', (e) => {
+  dbgRender();
+
+  $('#btnRunAll').addEventListener('click', dbgRunAll);  $('#recList').addEventListener('click', (e) => {
     const v = e.target.closest('button.dbg-view');
     if (v) return dbgViewRecord(v.dataset.id);
     const del2 = e.target.closest('button.dbg-del');

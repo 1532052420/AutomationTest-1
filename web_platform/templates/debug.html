@@ -11,7 +11,7 @@
 <main>
   <div class="pagehead">
     <h1>🧪 代码审查</h1>
-    <span class="sub" id="subTitle">框架体检 · 按模块分组 · 点统计卡筛选 · 交互调试 · 每次全部验证自动存记录</span>
+    <span class="sub" id="subTitle">框架体检 · 按模块分组 · 点统计卡筛选 · 每次全部验证自动存记录</span>
     <div class="actions">
       <button class="ghost" id="btnReload">⟳ 刷新清单</button>
       <button id="btnRunAll">▶ 全部验证</button>
@@ -20,7 +20,6 @@
 
   <div class="toptabs">
     <button class="ttab on" data-view="overview">📋 模块总览</button>
-    <button class="ttab" data-view="tools">🛠 交互调试</button>
     <button class="ttab" data-view="records">🗂 审查记录</button>
   </div>
 
@@ -37,14 +36,6 @@
     <div class="card healthline" id="healthLine"></div>
     <div id="fileChips" class="chips"></div>
     <div id="dbgList"><div class="card"><h3>加载中…</h3></div></div>
-  </section>
-
-  <section id="view-tools" style="display:none">
-    <div class="card">
-      <div class="tooltabs" id="toolTabs"></div>
-      <div id="toolForm"></div>
-      <div id="toolResult" class="mt"></div>
-    </div>
   </section>
 
   <section id="view-records" style="display:none">

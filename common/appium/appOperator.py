@@ -1363,25 +1363,30 @@ class AppOperator:
         if wait_expected_value:
             wait_expected_value = wait_expected_value
 
-        # 查找元素,为了保证元素被定位,都进行显式等待
-        if wait_type == Wait_By.TITLE_IS:
-            webElement = WebDriverWait(self._driver, wait_seconds).until(expected_conditions.title_is(wait_expected_value))
-        elif wait_type == Wait_By.TITLE_CONTAINS:
-            webElement = WebDriverWait(self._driver, wait_seconds).until(expected_conditions.title_contains(wait_expected_value))
-        elif wait_type == Wait_By.PRESENCE_OF_ELEMENT_LOCATED:
-            webElement = WebDriverWait(self._driver, wait_seconds).until(expected_conditions.presence_of_element_located((locator_type, locator_value)))
-        elif wait_type == Wait_By.ELEMENT_TO_BE_CLICKABLE:
-            webElement = WebDriverWait(self._driver, wait_seconds).until(expected_conditions.element_to_be_clickable((locator_type, locator_value)))
-        elif wait_type == Wait_By.ELEMENT_LOCATED_TO_BE_SELECTED:
-            webElement = WebDriverWait(self._driver, wait_seconds).until(expected_conditions.element_located_to_be_selected((locator_type, locator_value)))
-        elif wait_type == Wait_By.VISIBILITY_OF:
-            webElements = WebDriverWait(self._driver,wait_seconds).until((expected_conditions.visibility_of_all_elements_located((locator_type,locator_value))))
-            if len(webElements)>0:
-                webElement=webElements[0]
-        else:
-            # selenium4 移除了 find_element_by_*；locator_type 的值与 By/AppiumBy 常量字符串一致，统一走 find_element(by, value)
-            webElement = WebDriverWait(self._driver,wait_seconds).until(lambda driver:driver.find_element(locator_type, locator_value))
-        return webElement
+        # 查找元素,为了保证元素被定位,都进行显式等待。
+        # 等待超时时 selenium 原生 TimeoutException 会把 Appium 服务端 JS 堆栈整段拼进消息，
+        # allure 步骤里全是噪声，统一在这里精简成一句人话（保留定位器与等待时长）
+        try:
+            if wait_type == Wait_By.TITLE_IS:
+                webElement = WebDriverWait(self._driver, wait_seconds).until(expected_conditions.title_is(wait_expected_value))
+            elif wait_type == Wait_By.TITLE_CONTAINS:
+                webElement = WebDriverWait(self._driver, wait_seconds).until(expected_conditions.title_contains(wait_expected_value))
+            elif wait_type == Wait_By.PRESENCE_OF_ELEMENT_LOCATED:
+                webElement = WebDriverWait(self._driver, wait_seconds).until(expected_conditions.presence_of_element_located((locator_type, locator_value)))
+            elif wait_type == Wait_By.ELEMENT_TO_BE_CLICKABLE:
+                webElement = WebDriverWait(self._driver, wait_seconds).until(expected_conditions.element_to_be_clickable((locator_type, locator_value)))
+            elif wait_type == Wait_By.ELEMENT_LOCATED_TO_BE_SELECTED:
+                webElement = WebDriverWait(self._driver, wait_seconds).until(expected_conditions.element_located_to_be_selected((locator_type, locator_value)))
+            elif wait_type == Wait_By.VISIBILITY_OF:
+                webElements = WebDriverWait(self._driver,wait_seconds).until((expected_conditions.visibility_of_all_elements_located((locator_type,locator_value))))
+                if len(webElements)>0:
+                    webElement=webElements[0]
+            else:
+                # selenium4 移除了 find_element_by_*；locator_type 的值与 By/AppiumBy 常量字符串一致，统一走 find_element(by, value)
+                webElement = WebDriverWait(self._driver,wait_seconds).until(lambda driver:driver.find_element(locator_type, locator_value))
+            return webElement
+        except TimeoutException:
+            raise TimeoutException('等待元素超时(%ss)：%s 元素未找到' % (wait_seconds, self._element_desc(elementInfo))) from None
 
     def getElements(self,elementInfo):
         """
@@ -1395,15 +1400,18 @@ class AppOperator:
         wait_type = elementInfo.wait_type
         wait_seconds = elementInfo.wait_seconds
 
-        # 查找元素,为了保证元素被定位,都进行显式等待
-        if wait_type == Wait_By.PRESENCE_OF_ELEMENT_LOCATED:
-            webElements = WebDriverWait(self._driver, wait_seconds).until(expected_conditions.presence_of_all_elements_located((locator_type, locator_value)))
-        elif wait_type == Wait_By.VISIBILITY_OF:
-            webElements = WebDriverWait(self._driver, wait_seconds).until(expected_conditions.visibility_of_all_elements_located((locator_type,locator_value)))
-        else:
-            # selenium4 移除了 find_element_by_*；locator_type 的值与 By/AppiumBy 常量字符串一致，统一走 find_element(by, value)
-            webElements = WebDriverWait(self._driver,wait_seconds).until(lambda driver:driver.find_elements(locator_type, locator_value))
-        return webElements
+        # 查找元素,为了保证元素被定位,都进行显式等待（超时异常精简同 getElement）
+        try:
+            if wait_type == Wait_By.PRESENCE_OF_ELEMENT_LOCATED:
+                webElements = WebDriverWait(self._driver, wait_seconds).until(expected_conditions.presence_of_all_elements_located((locator_type, locator_value)))
+            elif wait_type == Wait_By.VISIBILITY_OF:
+                webElements = WebDriverWait(self._driver, wait_seconds).until(expected_conditions.visibility_of_all_elements_located((locator_type,locator_value)))
+            else:
+                # selenium4 移除了 find_element_by_*；locator_type 的值与 By/AppiumBy 常量字符串一致，统一走 find_element(by, value)
+                webElements = WebDriverWait(self._driver,wait_seconds).until(lambda driver:driver.find_elements(locator_type, locator_value))
+            return webElements
+        except TimeoutException:
+            raise TimeoutException('等待元素超时(%ss)：%s 元素未找到' % (wait_seconds, self._element_desc(elementInfo))) from None
 
     def getSubElement(self,parent_element,sub_elementInfo):
         """

@@ -497,3 +497,26 @@ def test_tool_http_request_local(platform):
     finally:
         srv.shutdown()
         srv.server_close()
+
+# ---------------------------------------------------------------- 元素定位器智能启动
+def test_locator_smart_start(platform):
+    """点击即启动：未运行则拉起并等就绪；已运行直接复用（TC-076）"""
+    code, body, _ = http('POST', '/api/locator/start', {}, timeout=60)
+    assert code == 200, body
+    d = json.loads(body)
+    assert d['ok'] and d['url'] == 'http://127.0.0.1:8001/'
+    assert isinstance(d['started'], bool)
+    # 再点一次：必定复用（不再重复拉起）
+    code, body, _ = http('POST', '/api/locator/start', {}, timeout=30)
+    d2 = json.loads(body)
+    assert d2['ok'] and d2['started'] is False
+
+
+def test_launcher_script_clean():
+    """双击启动器语法与内容检查（TC-077）"""
+    path = os.path.join(ROOT, '测试平台启动器.command')
+    assert os.path.isfile(path)
+    content = open(path, encoding='utf-8').read()
+    assert 'web_platform/app.py' in content and 'element_locator/server.py' in content
+    assert 'stop-platform' in content or 'pkill' in content
+    subprocess.run(['bash', '-n', path], check=True)

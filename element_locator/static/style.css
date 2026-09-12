@@ -238,45 +238,9 @@ main { flex: 1; display: flex; gap: 10px; padding: 10px 12px; min-height: 0; }
   font-size: 12px; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,.25); }
 .cont-add-chip:hover { background: #1e40af; }
 .modal-title .hint { font-weight: 400; font-size: 12px; color: #9ca3af; margin-left: 10px; }
-.case-grid { display: grid; grid-template-columns: 1fr 1fr; column-gap: 14px; }
-.case-grid label { margin-bottom: 8px; }
-.case-grid label.chk { display: flex; align-items: center; gap: 6px; align-self: end; margin-bottom: 14px; }
-.case-grid label.chk.wide { grid-column: 1 / -1; margin-bottom: 10px; align-self: center; }
-.case-grid label.chk input { width: auto; margin: 0; }
-/* 高级：生成去向（折叠，默认收起） */
-.adv-group { margin: 6px 0 10px; border: 1px solid #e5e7eb; border-radius: 8px; padding: 6px 12px; background: #f9fafb; }
-.adv-group summary { cursor: pointer; font-size: 12.5px; font-weight: 600; color: #374151; user-select: none; }
-.adv-group summary:hover { color: #1d4ed8; }
-.adv-group[open] summary { margin-bottom: 8px; }
-.steps-head { font-weight: 600; font-size: 13px; margin: 10px 0 6px; }
-.steps-head .hint { font-weight: 400; font-size: 12px; color: #9ca3af; }
-#case-steps { max-height: 260px; overflow: auto; border: 1px solid #e5e7eb; border-radius: 6px; padding: 6px 8px; background: #fafafa; }
-.step-row { display: flex; align-items: center; gap: 6px; padding: 4px 2px; border-bottom: 1px dashed #e5e7eb; }
-.step-row:last-child { border-bottom: none; }
-/* 步骤列头：与 .step-row 同布局 */
-.step-cols { display: flex; align-items: center; gap: 6px; padding: 2px 2px 5px; color: #6b7280; font-size: 11.5px; border-bottom: 1px solid #e5e7eb; }
-.step-idx { width: 22px; text-align: center; color: #9ca3af; font-size: 12px; flex: 0 0 auto; }
-.step-row .st-type { flex: 0 0 96px; }
-.step-row .st-ele { flex: 1.1; min-width: 90px; }
-.step-row .st-param { flex: 1; min-width: 90px; }
-.step-row .st-desc { flex: 1.4; min-width: 120px; }
-.step-row .st-type, .step-row .st-ele, .step-row .st-param, .step-row .st-desc {
-  width: auto; margin: 0; padding: 4px 8px; font-size: 12px;
-}
-.step-btns { display: flex; gap: 3px; flex: 0 0 auto; }
-.btn.mini { padding: 1px 7px; font-size: 12px; line-height: 1.6; border-radius: 4px; }
-.btn.mini.del { color: #dc2626; }
-.btn.mini:hover { background: #eef2ff; }
-.btn.mini.del:hover { background: #fee2e2; }
-.step-row .st-ele.missing { border-color: #dc2626; background: #fef2f2; }
-.step-row .st-ele.missing:focus { border-color: #dc2626; }
 /* 元素名绑定联动提示（自动切换元素文件等） */
 .bind-note { font-size: 12px; color: #1d4ed8; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 6px; padding: 5px 10px; margin: 4px 0 8px; }
-.steps-tools { display: flex; gap: 8px; margin: 8px 0; }
-.steps-empty { padding: 18px 10px; font-size: 12px; }
 .pv-title { font-weight: 600; font-size: 13px; margin: 8px 0 4px; }
-#case-preview-content { max-height: 240px; }
-#case-result { margin-top: 8px; }
 .quick-step { border-top: 1px dashed #d1d5db; margin-top: 10px; padding-top: 8px; }
 .quick-step .qs-title { font-size: 13px; font-weight: 600; margin-bottom: 6px; }
 .quick-step label { margin-bottom: 8px; }

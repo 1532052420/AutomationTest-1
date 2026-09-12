@@ -23,7 +23,7 @@ from tutorials import TUTORIALS, search_tutorials
 app = Flask(__name__, static_folder='static', static_url_path='/static')
 
 # 元素定位器版本号：每次功能/修复后递增，左上角会显示，用来确认本地是否已更新
-APP_VERSION = 'v2.13'
+APP_VERSION = 'v2.14'
 
 # 开发工具要能"改完即刷"，静态文件禁用浏览器强缓存（Flask 默认 max-age=12h）
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
@@ -193,55 +193,6 @@ def api_pages():
         'pages': case_generator.list_page_files(),
         'elements': {f: element_library.list_element_names(f)
                      for f in element_library.list_element_files()},
-    })
-
-
-@app.route('/api/add_case', methods=['POST'])
-def api_add_case():
-    """生成/追加 用例文件（可选同时生成页面对象文件）"""
-    data = request.get_json(silent=True) or {}
-    steps = data.get('steps') or []
-    if not isinstance(steps, list) or not steps:
-        return jsonify({'ok': False, 'msg': '至少需要一个用例步骤'})
-    # 校验步骤结构
-    valid_types = set(case_generator.STEP_TYPES)
-    for s in steps:
-        if not isinstance(s, dict) or s.get('type') not in valid_types:
-            return jsonify({'ok': False, 'msg': '步骤结构不合法：%r' % (s,)})
-
-    r = case_generator.gen_case(
-        data.get('case_file', '').strip(),
-        data.get('method_name', '').strip(),
-        data.get('desc', '').strip(),
-        data.get('pkg', '').strip(),
-        data.get('activity', '').strip(),
-        steps,
-        data.get('page_file', '').strip() or 'locator_gui_page.py',
-        page_class=data.get('page_class', '').strip() or None,
-        case_class=data.get('case_class', '').strip() or None,
-        gen_teardown=bool(data.get('gen_teardown', True)),
-    )
-    if not r['ok']:
-        return jsonify({'ok': False, 'msg': r.get('msg', '生成用例失败')})
-
-    page_r = None
-    if data.get('gen_page'):
-        page_r = case_generator.gen_page(
-            data.get('page_file', '').strip() or 'locator_gui_page.py',
-            steps,
-            data.get('elements_file', '').strip() or element_library.DEFAULT_FILE,
-            desc=data.get('page_desc', '').strip() or data.get('desc', '').strip(),
-            page_class=data.get('page_class', '').strip() or None,
-        )
-        if not page_r['ok']:
-            return jsonify({'ok': False, 'msg': '用例已生成，但页面生成失败：%s' % page_r.get('msg')})
-
-    return jsonify({
-        'ok': True,
-        'msg': r['msg'] + (('；页面 ' + page_r['msg']) if page_r else ''),
-        'action': r['action'],
-        'case': {'filename': data.get('case_file', '').strip(), 'content': r.get('content', '')},
-        'page': {'filename': data.get('page_file', '').strip(), 'content': page_r.get('content', '')} if page_r else None,
     })
 
 

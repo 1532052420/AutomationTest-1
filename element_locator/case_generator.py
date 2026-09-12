@@ -1,22 +1,12 @@
-# -*- coding: utf-8 -*-
 """
-GUI 元素定位器 · 用例 / 页面对象生成
-统一步骤结构（step dict）→ 生成：
-    cases/app_ui/android/demoProject/test_xxx.py                    （用例文件）
-    page_objects/app_ui/android/demoProject/pages/xxxPage.py        （页面对象文件，可选）
-风格严格对齐框架现有文件（test_kuaige_login.py / kuaigeLoginPage.py）：
+GUI 元素定位器 · 元素/操作 追加到用例（「添加到元素库」②③ 后端）
+统一步骤结构（step dict）→ 把一步操作代码追加到指定用例文件的方法体：
+    cases/app_ui/android/demoProject/test_xxx.py                    （用例行追加）
+    page_objects/app_ui/android/demoProject/pages/xxxPage.py        （③ 同步生成页面方法）
 元素与用例分离 —— 页面方法/用例只引用元素名 self._elements.<name>，不埋定位值。
-支持：新建文件 / 追加 test 方法 / 覆盖同名方法 / 自动补 import
-
-step dict 结构（前端两个入口生成完全一致的格式）：
-    {
-        'type': 'click'|'input'|'long_press'|'assert_visible'|'assert_text'
-                |'assert_toast'|'screenshot'|'tap'|'sleep'|'custom',
-        'element': '<元素名>',   # 引用元素库；tap/sleep/custom 不填
-        'param':   '',          # 输入内容/期望文本/toast文本/坐标(x,y)/秒数/自定义代码
-        'desc':    '点击登录按钮',  # 可读描述（自动生成，可改）
-    }
+支持：追加 test 方法体代码行 / 同名页面方法覆盖 / 自动补 import（用例文件本身在平台上传或手动创建）
 """
+
 import os
 import re
 
@@ -33,8 +23,6 @@ STEP_TYPES = [
     'assert_toast', 'screenshot', 'tap', 'sleep', 'custom',
 ]
 
-# 元素操作类步骤需要元素；工具/兜底步骤不需要
-ELEMENT_STEP_TYPES = {'click', 'input', 'long_press', 'assert_visible', 'assert_text'}
 
 # 页面里固定实现的工具方法：已存在则不重复生成
 TOOL_METHODS = {'wait_and_shot', 'tap_xy', 'assert_toast'}
@@ -92,29 +80,6 @@ def step_desc(step):
         'sleep': '等待%s秒' % p,
         'custom': (p or '自定义代码').splitlines()[0],
     }.get(t, '未定义步骤')
-
-
-def method_name(step):
-    """步骤 → 页面方法名；sleep/custom 返回 None（无对应页面方法）"""
-    t = step.get('type', '')
-    el = step.get('element') or ''
-    if t == 'click':
-        return 'click_%s' % el
-    if t == 'input':
-        return 'input_%s' % el
-    if t == 'long_press':
-        return 'long_press_%s' % el
-    if t == 'assert_visible':
-        return 'assert_%s' % el
-    if t == 'assert_text':
-        return 'assert_%s_text' % el
-    if t == 'assert_toast':
-        return 'assert_toast'
-    if t == 'screenshot':
-        return 'wait_and_shot'
-    if t == 'tap':
-        return 'tap_xy'
-    return None
 
 
 def _method_block(name, doc, args, body):
@@ -239,163 +204,6 @@ def _upsert_class_method(content, cls, method_blocks, before=None):
     return content[:cls_start] + new_body + content[cls_end:]
 
 
-def _methods_from_steps(steps):
-    """步骤 → 需要生成的页面方法代码块列表（保持顺序，同名元素操作取最后一个）"""
-    methods, seen = [], set()
-    for s in steps:
-        code = page_method_code(s)
-        if not code:
-            continue
-        name = re.match(r'%sdef (\w+)' % IND, code).group(1)
-        if name in seen:
-            methods = [x for x in methods if not x.startswith(IND + 'def %s' % name)]
-        seen.add(name)
-        methods.append(code)
-    return methods
-
-
-def gen_page(page_file, steps, elements_file, desc='', page_class=None):
-    """
-    生成/追加页面对象文件 xxxPage.py。
-    返回 {'ok': bool, 'action': 'created'|'updated'|'unchanged', 'content', 'msg'}
-    """
-    if not re.match(r'^[A-Za-z_][A-Za-z0-9_]*\.py$', page_file):
-        return {'ok': False, 'msg': '页面文件名不合法（只允许字母/数字/下划线 + .py）'}
-    page_class = page_class or element_library.to_class_name(page_file)
-    elements_class = element_library.to_class_name(elements_file)
-    path = os.path.join(PAGES_DIR, page_file)
-    methods = _methods_from_steps(steps)
-
-    if not os.path.exists(path):
-        init_block = ('%sdef __init__(self, appOperator):\n'
-                      '%sself.appOperator = appOperator\n'
-                      '%sself._elements = %s()\n\n') % (IND, IND * 2, IND * 2, elements_class)
-        body = init_block + '\n'.join(methods)
-        cls_doc = desc or '页面对象（GUI 定位器生成）'
-        content = ('# -*- coding: utf-8 -*-\n'
-                   '# %s\n'
-                   'from page_objects.app_ui.android.demoProject.elements.%s import %s\n\n\n'
-                   'class %s:\n    """%s"""\n\n%s\n') % (
-                       cls_doc,
-                       os.path.splitext(elements_file)[0], elements_class,
-                       page_class, cls_doc, body)
-        _write(path, content)
-        return {'ok': True, 'action': 'created', 'content': content,
-                'msg': '已新建页面 %s（%s 个方法）' % (page_file, len(methods))}
-
-    content = _read(path)
-    existing = set(re.findall(r'^%sdef (\w+)' % IND, content, re.MULTILINE))
-    # 工具方法已存在则跳过（实现固定）；元素操作方法同名覆盖
-    to_add = []
-    for code in methods:
-        name = re.match(r'%sdef (\w+)' % IND, code).group(1)
-        if name in existing and name in TOOL_METHODS:
-            continue
-        to_add.append(code)
-    content = _ensure_elements_import(content, elements_file, elements_class)
-    new_content = _upsert_class_method(content, page_class, to_add)
-    action = 'updated' if new_content != content else 'unchanged'
-    _write(path, new_content)
-    return {'ok': True, 'action': action, 'content': new_content,
-            'msg': '页面 %s 已更新（%s 个方法）' % (page_file, len(to_add))}
-
-
-# ---------------------------------------------------------------------------
-# 用例文件生成
-# ---------------------------------------------------------------------------
-def _test_method_block(method_name, steps, page_class):
-    lines = ['%sdef %s(self):' % (IND, method_name),
-             '%spage = self.page' % (IND * 2)]
-    if not steps:
-        lines.append('%spass' % (IND * 2))
-    for i, s in enumerate(steps, 1):
-        d = step_desc(s)
-        line = case_step_line(s)
-        lines.append('')
-        lines.append('%s# %d. %s' % (IND * 2, i, d))
-        if line:
-            lines.append('%s%s' % (IND * 2, line))
-        else:
-            lines.append('%s# (此步骤为兜底/等待，无需调用代码)' % (IND * 2))
-    return '\n'.join(lines) + '\n'
-
-
-def _case_class_block(case_class, method_name, desc, pkg, activity, steps,
-                      page_file, page_class, gen_teardown):
-    lines = ['class %s:' % case_class, '',
-             '%sdef setup_class(self):' % IND,
-             '%s# is_need_kill_app=False：绕开 demo 客户端硬编码启动，显式启动被测 App' % (IND * 2),
-             '%sself.demoProjectClient = APP_UI_Android_demoProject_Client(is_need_kill_app=False)' % (IND * 2),
-             '%sself.appOperator = self.demoProjectClient.appOperator' % (IND * 2),
-             "%sself.appOperator.start_activity('%s', '%s')" % (IND * 2, _escape(pkg), _escape(activity)),
-             '%stime.sleep(3)' % (IND * 2),
-             '%sself.page = %s(self.appOperator)' % (IND * 2, page_class),
-             '',
-             _test_method_block(method_name, steps, page_class).rstrip('\n')]
-    if gen_teardown:
-        lines += ['',
-                  '%sdef teardown_class(self):' % IND,
-                  '%sself.appOperator.reset_app()' % (IND * 2)]
-    return '\n'.join(lines)
-
-
-def gen_case(case_file, method_name, desc, pkg, activity, steps,
-             page_file, page_class=None, case_class=None, gen_teardown=True):
-    """
-    生成/追加用例文件 test_xxx.py。
-    返回 {'ok': bool, 'action': 'created'|'updated'|'added', 'content', 'msg'}
-    """
-    if not re.match(r'^test_[A-Za-z0-9_]+\.py$', case_file):
-        return {'ok': False, 'msg': '用例文件名必须以 test_ 开头（如 test_login.py），否则 pytest 不会收集执行这条用例'}
-    if not re.match(r'^[A-Za-z_][A-Za-z0-9_]*$', method_name):
-        return {'ok': False, 'msg': '用例方法名不合法'}
-    if not pkg or not activity:
-        return {'ok': False, 'msg': '包名和 Activity 不能为空'}
-    # 类名由文件名自动派生（test_login.py → TestLogin），保证以 Test 开头可被 pytest 收集
-    case_class = case_class or element_library.to_class_name(case_file)
-    page_class = page_class or element_library.to_class_name(page_file)
-    path = os.path.join(CASES_DIR, case_file)
-    test_block = _test_method_block(method_name, steps, page_class)
-
-    if not os.path.exists(path):
-        lines = ['# -*- coding: utf-8 -*-',
-                 '# %s' % (desc or 'GUI 定位器生成用例'),
-                 '# 流程：']
-        lines += ['# %d. %s' % (i, step_desc(s)) for i, s in enumerate(steps, 1)]
-        lines += ['import time',
-                  'from base.app_ui.android.demoProject.app_ui_android_demoProject_client '
-                  'import APP_UI_Android_demoProject_Client',
-                  'from page_objects.app_ui.android.demoProject.pages.%s import %s'
-                  % (os.path.splitext(page_file)[0], page_class),
-                  '',
-                  '']
-        lines.append(_case_class_block(case_class, method_name, desc, pkg, activity, steps,
-                                       page_file, page_class, gen_teardown))
-        content = '\n'.join(lines) + '\n'
-        _write(path, content)
-        return {'ok': True, 'action': 'created', 'content': content,
-                'msg': '已新建用例 %s（%s）' % (case_file, method_name)}
-
-    content = _read(path)
-    if re.search(r'^class %s\b' % re.escape(case_class), content, re.MULTILINE):
-        # 类已存在：类内追加/覆盖 test 方法（插到 teardown_class 前，setup/teardown 不动）
-        new_content = _upsert_class_method(content, case_class, [test_block], before='teardown_class')
-        action = 'updated'
-    else:
-        # 类不存在：文件末尾追加整个类（含 import 补全到文件头）
-        need = 'from page_objects.app_ui.android.demoProject.pages.%s import %s' % (
-            os.path.splitext(page_file)[0], page_class)
-        if need not in content:
-            content = need + '\n' + content
-        block = _case_class_block(case_class, method_name, desc, pkg, activity, steps,
-                                  page_file, page_class, gen_teardown)
-        new_content = content.rstrip('\n') + '\n\n\n' + block + '\n'
-        action = 'added'
-    _write(path, new_content)
-    return {'ok': True, 'action': action, 'content': new_content,
-            'msg': '用例 %s 已%s %s' % (case_file, '更新' if action == 'updated' else '追加', method_name)}
-
-
 # ---------------------------------------------------------------------------
 # 用例文件快速追加（「添加元素」弹窗 → 保存并添加到用例）
 # ---------------------------------------------------------------------------
@@ -516,12 +324,12 @@ def append_code_to_method(case_file, method_name, step, gen_page_method=False, i
 
     path = os.path.join(CASES_DIR, case_file)
     if not os.path.exists(path):
-        return {'ok': False, 'msg': '用例文件 %s 不存在，请先到「📝 用例工作台」创建' % case_file}
+        return {'ok': False, 'msg': '用例文件 %s 不存在（可在测试平台管理后台上传，或在 cases/app_ui/android/demoProject/ 下按框架格式创建）' % case_file}
     content = _read(path)
 
     m = re.search(r'^%sdef %s\(self\):' % (IND, re.escape(method_name)), content, re.MULTILINE)
     if not m:
-        return {'ok': False, 'msg': '用例文件 %s 里没有方法 %s（先到「📝 用例工作台」创建该方法再追加）'
+        return {'ok': False, 'msg': '用例文件 %s 里没有方法 %s（先在用例文件里创建该方法再追加）'
                                    % (case_file, method_name)}
     body_start = content.find('\n', m.end()) + 1
     if body_start <= 0:
@@ -569,7 +377,7 @@ def append_code_to_method(case_file, method_name, step, gen_page_method=False, i
     if not page_file:
         return {'ok': False,
                 'msg': ('已追加用例行，但目标用例没有页面对象（找不到 self.page = XxxPage(...)），'
-                        '无法生成操作方法——请先到「📝 用例工作台」生成该用例的页面对象')}
+                        '无法生成操作方法——请先给该用例补页面对象文件')}
 
     method_code = page_method_code(step)
     if not method_code:
@@ -611,26 +419,5 @@ def append_code_to_method(case_file, method_name, step, gen_page_method=False, i
 
 
 if __name__ == '__main__':
-    import json
-    import sys
     print('现有用例文件:', list_case_files())
     print('现有页面文件:', list_page_files())
-    if len(sys.argv) > 1 and sys.argv[1] == 'demo':
-        demo_steps = [
-            {'type': 'click', 'element': 'btn_phone_login', 'param': '', 'desc': '点击手机号登录入口'},
-            {'type': 'input', 'element': 'et_phone', 'param': '10000000000', 'desc': '输入手机号'},
-            {'type': 'input', 'element': 'et_code', 'param': '8888', 'desc': '输入验证码'},
-            {'type': 'assert_toast', 'element': '', 'param': '请先勾选下方协议', 'desc': '断言未勾选协议 toast'},
-            {'type': 'screenshot', 'element': '', 'param': 'demo_登录', 'desc': '截图'},
-            {'type': 'sleep', 'element': '', 'param': '2', 'desc': '等待 2 秒'},
-        ]
-        print('--- 生成页面 (demoLoginPage.py) ---')
-        r = gen_page('demoLoginPage.py', demo_steps, 'locator_gui_elements.py', desc='演示登录页面')
-        print(r['msg'], '| action:', r['action'])
-        print(r['content'])
-        print('--- 生成用例 (test_demo_login.py) ---')
-        r2 = gen_case('test_demo_login.py', 'test_demo_login', '演示登录流程', 'com.recordlife.kuaige',
-                      'com.recordlife.kuaige.feature.main.MainActivity', demo_steps,
-                      'demoLoginPage.py', gen_teardown=True)
-        print(r2['msg'], '| action:', r2['action'])
-        print(r2['content'])

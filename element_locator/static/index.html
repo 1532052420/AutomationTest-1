@@ -186,67 +186,6 @@
   </div>
 </div>
 
-<!-- 用例工作台弹窗 -->
-<div id="case-mask" class="modal-mask" style="display:none">
-  <div class="modal modal-wide">
-    <div class="modal-title">📝 用例工作台 <span class="hint">一条用例 = 一串步骤，每步 = <b>元素 + 操作</b>；用例、元素、操作三件缺一不可，点字段旁「?」看说明</span></div>
-    <div class="modal-body">
-
-      <div class="group-title">① 用例 <span class="hint">这条测试放哪个文件、测什么</span></div>
-      <div class="case-grid">
-        <label>用例文件名 <span class="help-icon" data-help="这条用例存到哪个 test_*.py 文件（cases/app_ui/android/demoProject/ 下）。一个功能一个文件：登录流程一个文件、写歌流程一个文件；一个文件里可以放多条用例。改动文件名会自动带出测试方法名。">?</span>
-          <input id="case-file" type="text" value="test_login.py">
-        </label>
-        <label>测试方法名 <span class="help-icon" data-help="一条用例 = 文件里一个 test_ 开头的方法，方法体里的代码就是一步步执行页面操作。已按文件名自动带出，一般不用改。用相同方法名再次点「生成用例」= 整体覆盖更新这条用例（改完步骤重新生成即可）。">?</span>
-          <input id="case-method" type="text" value="test_login">
-        </label>
-        <label>用例描述 <span class="help-icon" data-help="写到用例文件头部的注释，一句话说明这条用例测什么（如「快歌App登录流程」），方便自己和同事看懂、报告里好定位。可不填，不影响运行。">?</span>
-          <input id="case-desc" type="text" placeholder="如: 快歌App登录流程">
-        </label>
-      </div>
-
-      <div class="steps-head">② 用例步骤（每步 = 元素 + 操作） <span class="help-icon" data-help="一行 = 对哪个元素做什么操作，从上到下就是执行顺序。第二列选操作（点击/输入/断言…），第三列选元素名——必须和元素库里的一致，否则执行时找不到元素；需要参数的操作（输入/断言文本）在第四列填参数。元素和操作缺一不可：没有元素，操作没有目标；没有操作，元素不会被使用。工具类步骤（坐标点击/等待/截图/Toast断言）不需要元素。">?</span> <span class="hint">从上到下依次执行</span></div>
-      <div id="case-steps"></div>
-      <div class="steps-tools">
-        <button id="btn-step-add" class="btn small">＋ 从元素库添加步骤</button>
-        <button id="btn-step-custom" class="btn small">＋ 自定义代码步骤</button>
-      </div>
-      <div id="case-bind-note" class="bind-note" style="display:none"></div>
-
-      <div class="group-title">③ App 启动与收尾 <span class="hint">已按快歌预填，换 App 才需要改</span></div>
-      <div class="case-grid">
-        <label>App 包名 <span class="help-icon" data-help="被测 App 的 Android 包名，用例开头靠它拉起 App。快歌已预填；换 App 时改这里和下面的 Activity。">?</span>
-          <input id="case-pkg" type="text" value="com.recordlife.kuaige">
-        </label>
-        <label>启动页面 Activity <span class="help-icon" data-help="App 启动后进入的页面（Activity 完整路径），和包名一起决定从哪个页面开始测。快歌已预填。">?</span>
-          <input id="case-activity" type="text" value="com.recordlife.kuaige.feature.main.MainActivity">
-        </label>
-        <label class="chk wide"><input id="case-gen-teardown" type="checkbox" checked> 跑完自动关闭并清空 App <span class="help-icon" data-help="勾选 = 这条用例跑完立即关闭 App 并清空数据（恢复初始状态，保证下一条用例从干净状态开始，测试惯例）。想跑完把 App 留在手机上观察结果，就去掉勾选——但下一条用例可能受残留状态影响。">?</span></label>
-      </div>
-
-      <details class="adv-group">
-        <summary>高级：生成去向（自动处理，一般不用改）</summary>
-        <div class="case-grid">
-          <label>操作保存到哪个页面文件 <span class="help-icon" data-help="每步「操作」会生成一个页面方法（如 click_login_btn），写进这个 xxxPage.py 文件——这就是「操作」的存放地。默认自动新建与用例同名的页面文件；也可以选已有文件，把操作追加进去。">?</span>
-            <select id="case-page-file"></select>
-          </label>
-          <label>元素在哪个元素文件 <span class="help-icon" data-help="页面文件通过这个元素文件引用元素（self._elements.xxx）。必须选「元素实际所在」的文件——步骤里选的元素在哪个文件，这里就选哪个；选错执行时会报找不到元素。">?</span>
-            <select id="case-ele-file"></select>
-          </label>
-        </div>
-      </details>
-
-      <div id="case-result" class="el-result"></div>
-      <div class="pv-title">生成预览 <span class="help-icon" data-help="随上方步骤实时更新：每一行就是将写进用例方法的代码（page.操作_元素名()）。元素名一改这里立刻变——这就是「元素名 → 页面方法名 → 用例代码」的绑定关系；出现 ⚠ 说明该元素名在元素库里不存在，执行会失败，保存时也会被拦截。">?</span> <span class="hint">随步骤实时更新</span></div>
-      <pre id="case-preview-content" class="el-content"></pre>
-    </div>
-    <div class="modal-foot">
-      <button id="btn-case-cancel" class="btn">取消</button>
-      <button id="btn-case-save" class="btn primary">生成用例</button>
-    </div>
-  </div>
-</div>
-
 <!-- 顶部快速打开·文件编辑 弹窗 -->
 <div id="view-mask" class="modal-mask" style="display:none">
   <div class="modal modal-wide">
@@ -263,6 +202,6 @@
 <!-- 字段帮助气泡（点击问号显示） -->
 <div id="help-tip" class="help-tip" style="display:none"></div>
 
-<script src="/static/index.js?v=24"></script>
+<script src="/static/index.js?v=25"></script>
 </body>
 </html>

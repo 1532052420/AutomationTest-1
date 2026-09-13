@@ -435,6 +435,12 @@ async function refresh() {
     }
     state.width = r.width; state.height = r.height;
     state.tree = r.tree; state.all = r.all || [];
+    // 刷新成功：状态栏同步当前设备（切换设备后从「切换中…」恢复为设备信息）
+    if (r.device) {
+      const dv = $('dev-info');
+      dv.textContent = '📱 ' + r.device.model + ' | Android ' + r.device.platformVersion;
+      dv.className = 'dev-info ok';
+    }
     // 统一分配 uid（DFS 先父后子，tree 与 all 顺序一致）
     let seq = 1;
     (function assign(node) { node.uid = seq++; node.children.forEach(assign); })(state.tree);

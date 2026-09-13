@@ -372,6 +372,12 @@ function bindHelpIcons() {
 }
 
 /* ---------- 多设备切换 ---------- */
+/* 设备下拉选项文案：同型号多台设备（如同一台手机的 USB+WiFi 双通道）靠 serial 尾段区分 */
+function deviceOptionText(d) {
+  let tail = d.serial || '';
+  if (tail.length > 9) tail = '…' + tail.slice(-8);
+  return d.model + ' · Android ' + d.platformVersion + '（' + tail + '）';
+}
 async function loadDevices() {
   const sel = $('device-sel');
   if (!sel) return;
@@ -381,7 +387,7 @@ async function loadDevices() {
     return;
   }
   sel.innerHTML = r.devices.map(d =>
-    '<option value="' + esc(d.serial) + '">' + esc(d.model) + ' · Android ' + esc(d.platformVersion) + '</option>').join('');
+    '<option value="' + esc(d.serial) + '">' + esc(deviceOptionText(d)) + '</option>').join('');
   // 恢复上次选中的设备（同一台服务器上刷新页面不跳回第一台）
   let want = null;
   try { want = localStorage.getItem('locator_serial'); } catch (e) {}
@@ -454,8 +460,9 @@ async function refresh() {
     }
     state.width = r.width; state.height = r.height;
     state.tree = r.tree; state.all = r.all || [];
-    // 刷新成功：状态栏同步当前设备（切换设备后从「切换中…」恢复为设备信息）
-    if (r.device) {
+    // 刷新成功：状态栏同步当前设备（切换设备后从「切换中…」恢复为设备信息）。
+    // 注意：上面发生掉线回退时已写入「⚠ 已掉线」警告，这里不能再覆盖掉它
+    if (r.device && !r.fallback) {
       const dv = $('dev-info');
       dv.textContent = '📱 ' + r.device.model + ' · Android ' + r.device.platformVersion;
       dv.title = r.device.model + '（' + (r.serial || '') + '）';

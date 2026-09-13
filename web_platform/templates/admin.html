@@ -54,6 +54,23 @@
   </div>
 
   <div class="card">
+    <h3>📦 上传用例包（zip · 一次传齐三件套）</h3>
+    <div class="fields">
+      <div class="field"><label>用例包 zip（内含 test_*.py + xxxPage.py + xxxElements.py）</label>
+        <input type="file" id="upZip" accept=".zip">
+      </div>
+      <p class="muted" style="font-size:12px;margin:4px 0 0">
+        包内文件按命名自动归位：test_*.py → 测试用例、xxxPage.py → 页面对象、xxxElements.py → 元素定位；
+        也支持 cases/ pages/ elements/ 一级目录结构。入库前自动校验语法与三件套 import 完整性（缺文件会指名道姓报错）。
+      </p>
+    </div>
+    <div class="mt" style="display:flex;gap:10px;align-items:center">
+      <button id="btnUploadZip">📦 上传用例包</button>
+      <label class="muted"><input type="checkbox" id="upZipForce"> 覆盖同名文件（自动备份历史版本）</label>
+    </div>
+  </div>
+
+  <div class="card">
     <div class="cardhead">
       <h3>📄 文件列表 <span class="muted" id="fileCount"></span>
         <select id="typeFilter" style="margin-left:10px;background:var(--dark);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:2px 6px">

@@ -148,6 +148,36 @@ async function adminUpload(force) {
   if (d.ok) { fileInput.value = ''; adminLoadFiles(); }
 }
 
+async function adminUploadZip(force, overwrite) {
+  const fileInput = $('#upZip');
+  if (!fileInput.files.length) return toast('请选择用例包 zip', false);
+  const fd = new FormData();
+  fd.append('uploader', $('#upUploader').value.trim() || 'admin');
+  fd.append('force', force ? 'true' : 'false');
+  if (overwrite) fd.append('overwrite', overwrite.join(','));
+  fd.append('file', fileInput.files[0]);
+  const btn = $('#btnUploadZip');
+  btn.textContent = '⏳ 上传中…'; btn.disabled = true;
+  let d;
+  try {
+    d = await adminApi('/api/admin/upload_zip', {method: 'POST', body: fd});
+  } finally {
+    btn.textContent = '📦 上传用例包'; btn.disabled = false;
+  }
+  if (d.needToken) { $('#authCard').style.display = ''; return toast('请先输入访问口令', false); }
+  if (d.conflicts) {
+    // 冲突清单确认：列出与库内同名的文件，确认后全部覆盖（自动备份历史版本）
+    const yes = await confirmModal('⚠️ 用例包内存在同名文件',
+      '以下文件与库内现有文件重名，原上传人：' +
+      d.conflicts.map(c => c.path + '（' + (c.uploader || '框架') + '）').join('、') +
+      '。确认将覆盖这些文件（自动备份历史版本），其余文件正常入库。', true);
+    if (yes) await adminUploadZip(true, d.conflicts.map(c => c.path));
+    return;
+  }
+  toast(d.msg || (d.ok ? '用例包上传成功' : '用例包上传失败'), d.ok);
+  if (d.ok) { fileInput.value = ''; adminLoadFiles(); }
+}
+
 /* ---------------- 批量 / 重命名 / 新建文件夹 ---------------- */
 async function adminBatchDelete() {
   const paths = adminSelected().filter(p => {
@@ -194,6 +224,7 @@ function adminInit() {
   renderSidebar('/admin');
   adminLoadFiles();
   $('#btnUpload').addEventListener('click', () => adminUpload(false));
+  $('#btnUploadZip').addEventListener('click', () => adminUploadZip(false));
   $('#btnToken').addEventListener('click', () => {
     localStorage.setItem('adminToken', $('#inToken').value.trim());
     toast('口令已保存到本机浏览器');

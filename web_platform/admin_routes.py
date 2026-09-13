@@ -12,6 +12,7 @@
 - 受保护文件（框架公共文件，如 conftest.py）删除/重命名需管理员权限
   （本机模式即管理员；启用 ADMIN_TOKEN 后需请求头 X-Admin-Token 匹配）
 """
+import ast
 import io
 import json
 import os
@@ -291,6 +292,243 @@ def api_admin_upload():
     return jsonify({'ok': True, 'auth': auth, 'path': full_rel, 'backed_up': bool(exists),
                     'msg': ('已覆盖上传 %s（旧文件已自动备份）' if exists else '已上传 %s') % filename
                     + '，平台已自动识别'})
+
+
+@bp.route('/api/admin/upload_zip', methods=['POST'])
+def api_admin_upload_zip():
+    """上传用例包（zip）：解压 → 识别三件套 → 语法+import 完整性校验 → 冲突确认 → 分发落库 + 包登记。
+    zip 内文件按「一级目录（cases/pages/elements）」识别，无目录时按命名模式兜底：
+    test_*.py→用例、*Page.py→页面对象、*Elements.py→元素；都不匹配的文件整体拒绝并列出。
+    任一文件校验失败 → 整体回滚不落半个文件（两阶段：全部写 .uploading 校验通过后统一替换）。"""
+    try:
+        _check_token()
+    except AdminError as e:
+        return jsonify({'ok': False, 'msg': str(e)}), 401
+    f = request.files.get('file')
+    if f is None or not f.filename:
+        return jsonify({'ok': False, 'msg': '未选择 zip 文件'}), 400
+    if not f.filename.lower().endswith('.zip'):
+        return jsonify({'ok': False, 'msg': '请上传 .zip 用例包'}), 400
+    package = os.path.splitext(os.path.basename(f.filename))[0].strip()
+    if not re.match(r'^[A-Za-z0-9_\-]+$', package):
+        return jsonify({'ok': False, 'msg': '用例包名不合法（仅字母/数字/下划线/中划线）: %r' % package}), 400
+    force = request.form.get('force') == 'true'
+    overwrite = set(filter(None, (request.form.get('overwrite') or '').split(',')))
+    uploader = (request.form.get('uploader') or 'admin').strip()[:32]
+    content = f.read()
+    if len(content) > 2 * 1024 * 1024:
+        return jsonify({'ok': False, 'msg': 'zip 过大（限 2MB）'}), 400
+
+    # ---- 解压（防 zip 炸弹：条目数/总大小/单文件大小/路径安全）----
+    try:
+        zf = zipfile.ZipFile(io.BytesIO(content))
+    except zipfile.BadZipFile:
+        return jsonify({'ok': False, 'msg': 'zip 文件已损坏或不是有效 zip'}), 400
+    names = zf.namelist()
+    if len(names) > 60:
+        return jsonify({'ok': False, 'msg': 'zip 内文件过多（限 60 个）'}), 400
+    entries = {}   # 归一化相对路径 -> bytes
+    total = 0
+    for name in names:
+        if name.endswith('/'):
+            continue
+        norm = name.replace('\\', '/').lstrip('/')
+        if '..' in norm or norm.startswith('/'):
+            return jsonify({'ok': False, 'msg': 'zip 内含不安全路径: %s' % name}), 400
+        data = zf.read(name)
+        total += len(data)
+        if len(data) > MAX_UPLOAD_BYTES:
+            return jsonify({'ok': False, 'msg': 'zip 内单文件过大（限 200KB）: %s' % norm}), 400
+        if total > 5 * 1024 * 1024:
+            return jsonify({'ok': False, 'msg': 'zip 解压总大小超限（5MB）'}), 400
+        entries[norm] = data
+    if not entries:
+        return jsonify({'ok': False, 'msg': 'zip 内没有文件'}), 400
+
+    # ---- 识别三件套：一级目录优先，命名模式兜底 ----
+    KIND_BY_DIR = {'cases': 'case', 'pages': 'page', 'elements': 'element'}
+    items = []       # [{'filename', 'kind', 'data', 'src_name'}]
+    rejected = []
+    for norm, data in sorted(entries.items()):
+        if not norm.lower().endswith('.py'):
+            rejected.append({'file': norm, 'reason': '仅支持 .py 文件'})
+            continue
+        base_name = os.path.basename(norm)
+        top_dir = norm.split('/')[0] if '/' in norm else ''
+        kind = KIND_BY_DIR.get(top_dir)
+        if not kind:
+            if re.match(r'^test_[A-Za-z0-9_]+\.py$', base_name):
+                kind = 'case'
+            elif base_name.endswith('Page.py'):
+                kind = 'page'
+            elif base_name.endswith('Elements.py'):
+                kind = 'element'
+        if not kind:
+            rejected.append({'file': norm, 'reason': '无法识别类型（需 cases/pages/elements 目录或 test_*/…Page/…Elements 命名）'})
+            continue
+        items.append({'filename': base_name, 'kind': kind, 'data': data, 'src_name': norm})
+    if rejected:
+        return jsonify({'ok': False, 'msg': '以下文件无法识别归属，请整理后重新打包',
+                        'rejected': rejected}), 400
+    if not any(it['kind'] == 'case' for it in items):
+        return jsonify({'ok': False, 'msg': '用例包内没有测试用例（缺少 test_*.py），无法执行'}), 400
+    dup = [k for k in {'case', 'page', 'element'}
+           if sum(1 for it in items if it['kind'] == k) > 1 and k != 'case']
+    if dup:
+        return jsonify({'ok': False, 'msg': '包内同一类型出现多个文件（%s），一个用例包应为一套三件套' % '/'.join(dup)}), 400
+
+    # ---- 落位目标 + 语法校验（全部写临时文件，两阶段）----
+    # 用例固定分发到框架 App UI 用例约定目录（scan_case_tree 只收集 cases/app_ui 下的 test_*.py），
+    # 页面/元素到 demoProject 对应目录——三处都是 import 链的约定位置
+    target_dir_by_kind = {
+        'case': os.path.join(_UPLOAD_TARGETS['cases'], 'app_ui', 'android', 'demoProject'),
+        'page': _UPLOAD_TARGETS['pages'],
+        'element': _UPLOAD_TARGETS['elements'],
+    }
+    meta = _load_meta()
+    # ---- 冲突检测先行（在写临时文件前）：与库内同名且未确认覆盖 → 409 列清单 ----
+    def _target_of(it):
+        return os.path.join(target_dir_by_kind[it['kind']], it['filename'])
+
+    conflicts = []
+    for it in items:
+        full_rel = os.path.relpath(_target_of(it), ROOT).replace(os.sep, '/')
+        if os.path.isfile(_target_of(it)) and not force and full_rel not in overwrite:
+            conflicts.append({'path': full_rel,
+                              'uploader': _meta_of(meta, full_rel).get('uploader', '框架')})
+    if conflicts:
+        return jsonify({'ok': False, 'conflicts': conflicts,
+                        'msg': '以下文件与库内现有文件重名，请确认覆盖'}), 409
+
+    plan = []        # [{'item','target','full_rel','exists'}]
+    tmp_files = []   # (tmp_path, target, existed)
+    try:
+        for it in items:
+            target = os.path.join(target_dir_by_kind[it['kind']], it['filename'])
+            full_rel = os.path.relpath(target, ROOT).replace(os.sep, '/')
+            exists = os.path.isfile(target)
+            tmp = target + '.uploading'
+            with open(tmp, 'wb') as fh:
+                fh.write(it['data'])
+            tmp_files.append((tmp, target, exists))
+            plan.append({'item': it, 'target': target, 'full_rel': full_rel, 'exists': exists})
+        for tmp, _, _ in tmp_files:
+            _syntax_check(tmp, '.py')
+
+        # ---- import 完整性：用例 import 的页面模块、页面 import 的元素模块必须可解析 ----
+        pkg_page = {it['filename'][:-3] for it in items if it['kind'] == 'page'}
+        pkg_element = {it['filename'][:-3] for it in items if it['kind'] == 'element'}
+        pages_dir = _UPLOAD_TARGETS['pages']
+        elements_dir = _UPLOAD_TARGETS['elements']
+        PREFIX = 'page_objects.app_ui.android.demoProject.'
+        for it in items:
+            if it['kind'] not in ('case', 'page'):
+                continue
+            try:
+                mod = ast.parse(it['data'].decode('utf-8', 'ignore'))
+            except SyntaxError:
+                continue   # 语法错误已被 py_compile 拦截
+            for node in ast.walk(mod):
+                if not isinstance(node, ast.ImportFrom) or not node.module:
+                    continue
+                m = node.module
+                # 模块名取 node.module 中前缀之后的段（from ...pages.xxxPage import XxxPage）；
+                # `from ...pages import 类名` 的写法无法映射到文件名，跳过（运行时由 import 兜底）
+                need = None
+                for kind, sub in (('page', 'pages'), ('element', 'elements')):
+                    if m == PREFIX + sub:
+                        need = None    # 裸 from ...pages import 类名：跳过文件级校验
+                        break
+                    if m.startswith(PREFIX + sub + '.'):
+                        need = (kind, sub)
+                        break
+                if not need:
+                    continue
+                kind, sub = need
+                mod_name = m[len(PREFIX + sub) + 1:].split('.')[0]
+                need_set = pkg_page if kind == 'page' else pkg_element
+                dir_path = pages_dir if kind == 'page' else elements_dir
+                label = '页面对象' if kind == 'page' else '元素'
+                if mod_name in need_set:
+                    continue
+                if os.path.isfile(os.path.join(dir_path, mod_name + '.py')):
+                    continue   # 框架库里已有
+                raise AdminError('%s 缺少依赖：引用了%s %s.py，但包内和框架里都没有该文件'
+                                 % (it['filename'], label, mod_name))
+    except AdminError as e:
+        for tmp, _, _ in tmp_files:
+            if os.path.isfile(tmp):
+                os.remove(tmp)
+        return jsonify({'ok': False, 'msg': str(e)}), 400
+    except Exception as e:
+        for tmp, _, _ in tmp_files:
+            if os.path.isfile(tmp):
+                os.remove(tmp)
+        return jsonify({'ok': False, 'msg': '用例包校验失败: %s' % e}), 400
+
+    # ---- 冲突确认：存在未勾选覆盖的同名文件 → 409 列清单 ----
+    # ---- 统一落库（覆盖的先备份）+ 包登记 ----
+    placed, backed_up = [], []
+    try:
+        for tmp, target, exists in tmp_files:
+            full_rel = os.path.relpath(target, ROOT).replace(os.sep, '/')
+            if exists:
+                stem, ext = os.path.splitext(target)
+                backup_name = '%s_%s_backup%s' % (stem, time.strftime('%Y%m%d_%H%M%S'), ext)
+                os.replace(target, backup_name)
+                m = _meta_of(meta, full_rel)
+                m.setdefault('backups', []).append(os.path.basename(backup_name))
+                m['backups'] = m['backups'][-20:]
+                backed_up.append(os.path.basename(backup_name))
+            m = meta.setdefault(full_rel, {})
+            m['uploader'] = uploader
+            m['uploaded_at'] = int(time.time())
+            m['package'] = package
+            os.replace(tmp, target)
+            placed.append({'path': full_rel, 'kind': next(it['kind'] for it in items
+                                                           if it['filename'] == os.path.basename(target))})
+        _save_meta(meta)
+        packages = _load_packages()
+        packages[package] = {
+            'package': package,
+            'files': [p['full_rel'] for p in plan],
+            'uploader': uploader,
+            'uploaded_at': int(time.time()),
+        }
+        _save_packages(packages)
+    except Exception as e:
+        return jsonify({'ok': False, 'msg': '落库失败（已完成回滚尝试）: %s' % e}), 500
+    return jsonify({'ok': True, 'package': package,
+                    'placed': placed, 'backed_up': backed_up,
+                    'msg': '用例包「%s」已入库：%s' % (
+                        package, '、'.join(p['path'] for p in placed))})
+
+
+PACKAGES_PATH = os.environ.get('CASE_PACKAGES_PATH') or os.path.join(
+    BASE_DIR, 'output', 'case_packages.json')
+
+
+def _load_packages():
+    if not os.path.isfile(PACKAGES_PATH):
+        return {}
+    try:
+        with open(PACKAGES_PATH, encoding='utf-8') as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+def _save_packages(packages):
+    os.makedirs(os.path.dirname(PACKAGES_PATH), exist_ok=True)
+    with open(PACKAGES_PATH, 'w', encoding='utf-8') as f:
+        f.write(json.dumps(packages, ensure_ascii=False, indent=1))
+
+
+@bp.route('/api/admin/packages')
+def api_admin_packages():
+    """用例包登记表（执行页按包分组/筛选用）"""
+    return jsonify({'ok': True, 'packages': _load_packages()})
 
 
 @bp.route('/api/admin/download')

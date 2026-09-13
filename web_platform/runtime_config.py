@@ -113,6 +113,8 @@ def scan_case_tree():
         for fn in sorted(filenames):
             if not (fn.startswith('test_') and fn.endswith('.py')):
                 continue
+            if '_backup' in fn:
+                continue   # 管理后台覆盖备份（xxx_时间戳_backup.py）不是可执行用例，不收集
             path = os.path.join(dirpath, fn)
             rel = os.path.relpath(path, BASE_DIR).replace(os.sep, '/')
             try:

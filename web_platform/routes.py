@@ -166,7 +166,19 @@ def api_devices():
 
 @bp.route('/api/cases')
 def api_cases():
-    return jsonify({'ok': True, 'tree': scan_case_tree()})
+    tree = scan_case_tree()
+    # 附带用例包归属（管理后台 zip 上传登记）：执行页按包分组/筛选用
+    try:
+        from web_platform.admin_routes import _load_packages
+        file_pkg = {}
+        for pkg in _load_packages().values():
+            for fp in pkg.get('files', []):
+                file_pkg[fp] = pkg.get('package', '')
+        for item in tree:
+            item['package'] = file_pkg.get(item.get('file', ''), '')
+    except Exception:
+        pass
+    return jsonify({'ok': True, 'tree': tree})
 
 
 @bp.route('/api/confs')

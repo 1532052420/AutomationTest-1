@@ -1,4 +1,4 @@
-/* App UI 自动化测试平台 v1.3 · 前端逻辑 */
+/* App UI 自动化测试平台 v1.4 · 前端逻辑 */
 'use strict';
 
 /* ---------------- 基础工具 ---------------- */
@@ -93,7 +93,7 @@ function renderSidebar(active) {
     ['/locator', '🎯', '元素定位器'],
   ];
   sb.innerHTML =
-    '<div class="brand"><div class="logo">🤖</div><div>AppUI 自动化<br><small>测试平台 v1.3</small></div></div>' +
+    '<div class="brand"><div class="logo">🤖</div><div>AppUI 自动化<br><small>测试平台 v1.4</small></div></div>' +
     '<nav>' + items.map(([href, ico, name]) =>
       '<a href="' + href + '" class="' + (href === active ? 'on' : '') + '"><span class="ico">' + ico + '</span>' + name + '</a>'
     ).join('') + '</nav>' +
@@ -402,10 +402,30 @@ async function loadCaseTree() {
     box.innerHTML = '<div class="empty"><span class="eico">📂</span>cases/app_ui 下没有可执行用例</div>';
     return;
   }
+  // 用例包筛选（管理后台 zip 上传登记的包）：全部 / 每个包
+  const pkgs = [];
+  d.tree.forEach(f => { if (f.package && pkgs.indexOf(f.package) < 0) pkgs.push(f.package); });
+  const filterWrap = $('#pkgFilterWrap');
+  if (filterWrap) {
+    filterWrap.style.display = pkgs.length ? '' : 'none';
+    filterWrap.innerHTML = '<label class="chk">按用例包筛选：<select id="pkgFilter">' +
+      '<option value="">全部用例</option>' +
+      pkgs.map(p => '<option value="' + esc(p) + '">📦 ' + esc(p) + '</option>').join('') +
+      '</select></label>';
+    $('#pkgFilter').addEventListener('change', () => {
+      const v = $('#pkgFilter').value;
+      box.querySelectorAll('li[data-file-li]').forEach(li => {
+        li.style.display = (!v || li.dataset.pkg === v) ? '' : 'none';
+      });
+    });
+  }
   let html = '<ul>';
   d.tree.forEach(f => {
-    html += '<li><label class="chk"><input type="checkbox" data-file="' + esc(f.file) + '" class="ck-file">' +
-      '<span class="file">' + esc(f.file.split('/').pop()) + '</span> <span class="muted">' + esc(f.file) + '</span></label><ul>';
+    const pkgTag = f.package ? ' <span class="pill">📦 ' + esc(f.package) + '</span>' : '';
+    html += '<li data-file-li data-pkg="' + esc(f.package || '') + '">' +
+      '<label class="chk"><input type="checkbox" data-file="' + esc(f.file) + '" class="ck-file">' +
+      '<span class="file">' + esc(f.file.split('/').pop()) + '</span>' + pkgTag +
+      ' <span class="muted">' + esc(f.file) + '</span></label><ul>';
     f.methods.forEach(m => {
       const node = f.file + '::' + f.class_name + '::' + m;
       html += '<li><label class="chk"><input type="checkbox" data-node="' + esc(node) + '" class="ck-node">' +

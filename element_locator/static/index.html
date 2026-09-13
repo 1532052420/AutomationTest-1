@@ -172,7 +172,7 @@ try {
           <label>操作类型 <span class="help-icon" data-help="保存后要「对这个元素做什么」，决定生成的代码。按分组找：基本操作=点击/输入/长按/坐标/截图/固定等待；断言=存在/文本/Toast/消失（弹窗关了才算过）；长流程=轮询等待出现（生成中/加载慢）、出现才点击（偶发弹窗分支）、收起键盘。断言也是操作的一种：框架把断言逻辑封装在页面方法里（Page Object 惯例），用例只调用 page.assert_xxx()。不需要参数的类型参数框自动隐藏。">?</span>
             <select id="el-op-type"></select>
           </label>
-          <label id="el-op-param-wrap">操作参数 <span class="help-icon" data-help="操作需要的额外内容：输入→文本；断言Toast→toast 文案；断言文本→期望文字；坐标点击→x,y；轮询等待出现→最长等待秒数（超时用例失败）；出现才点击→探测秒数（没出现就跳过）；固定等待→秒数；截图→截图名。不需要时自动隐藏。">?</span>
+          <label id="el-op-param-wrap">操作参数 <span class="help-icon" data-help="操作需要的额外内容：输入→文本；断言Toast→toast 文案；断言文本→期望文字；坐标点击→x,y；轮询等待出现→最长等待秒数（超时用例失败）；出现才点击→探测秒数，例填 3=最多等 3 秒找弹窗，出现就点、没出现就跳过；固定等待→秒数；截图→截图名。不需要时自动隐藏。">?</span>
             <input id="el-op-param" type="text" placeholder="输入内容 / 期望文本 / toast文本 / 坐标(x,y) / 秒数">
           </label>
           <label>步骤描述 <span class="help-icon" data-help="这一步做了什么（如「点击消息进入消息详情」），生成到用例注释和页面方法说明里，测试报告里也按它显示。已按元素文本自动生成，报告需要更友好的文字时再改；留空也会自动补。">?</span>
@@ -225,6 +225,6 @@ try {
 <!-- 字段帮助气泡（点击问号显示） -->
 <div id="help-tip" class="help-tip" style="display:none"></div>
 
-<script src="/static/index.js?v=43"></script>
+<script src="/static/index.js?v=44"></script>
 </body>
 </html>

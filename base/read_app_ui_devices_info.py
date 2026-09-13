@@ -1,6 +1,4 @@
-# 作者 1532052420
 # 创建时间 2019/12/26 11:15
-# github https://github.com/1532052420
 from pojo.app_ui_devices_info import APP_UI_Devices_Info
 import configparser as ConfigParser
 

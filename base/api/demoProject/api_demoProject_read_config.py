@@ -1,8 +1,6 @@
 #
 # api_demoProject_read_config.py
-# @author 1532052420
 # @description 
-# @github https://github.com/1532052420
 # @created 2021-04-13T10:59:57.605Z+08:00
 # @last-modified 2023-05-12T11:04:36.647Z+08:00
 #

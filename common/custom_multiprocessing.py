@@ -1,8 +1,6 @@
 #
 # custom_multiprocessing.py
-# @author 1532052420
 # @description 
-# @github https://github.com/1532052420
 # @created 2022-08-20T17:27:14.632Z+08:00
 # @last-modified 2022-11-07T19:44:59.558Z+08:00
 # 

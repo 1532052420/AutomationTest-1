@@ -1,8 +1,6 @@
 #
 # run_api_test.py
-# @author 1532052420
 # @description 
-# @github https://github.com/1532052420
 # @created 2021-04-13T10:59:18.120Z+08:00
 # @last-modified 2023-05-12T11:04:28.256Z+08:00
 #

@@ -1,4 +1,3 @@
-# @Author  : 1532052420
 # @Time    : 2020/1/15 14:08
 import platform
 

@@ -1,8 +1,6 @@
 #
 # generate_app_ui_test_report.py
-# @author 1532052420
 # @description 
-# @github https://github.com/1532052420
 # @created 2021-04-13T10:59:18.000Z+08:00
 # @last-modified 2023-03-27T18:20:59.510Z+08:00
 #

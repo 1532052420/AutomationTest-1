@@ -1,11 +1,3 @@
-<!--
-### [感谢]()
-：可靠且性价比高的海外代理IP提供商。为企业和开发者提供稳定、高效的海外代理 IP 服务。注册即可免费试用1GB住宅代理，并获得 2000 次免费 SERP API 调用。
-<a href="https://www..com/?ls=github&lk=automationtest" target="_blank">
-    <img src="https://github.com/1532052420/resources/blob/master/APIAutomationTest/.png" alt="">
-</a>
--->
-
 # [自动化测试]()
 
 # [概况]()
@@ -338,10 +330,3 @@
             * 确认手机是否能进行视频录制执行命令adb shell screenrecord /sdcard/test.mp4，能正常执行即可
     * 设备屏幕坐标系原点都在最左上角，往右x轴递增，往下y轴递增
 
-# [进交流群]()
-![avatar](https://github.com/1532052420/resources/blob/master/wechat.png =200x)
-
-
-[![Stargazers over time](https://starchart.cc/1532052420/AutomationTest.svg)](https://starchart.cc/1532052420/AutomationTest)
-
-[![Top Langs](https://profile-counter.glitch.me/1532052420/count.svg)](https://github.com/1532052420)

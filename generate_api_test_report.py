@@ -1,9 +1,7 @@
 ﻿
 #
 # generate_api_test_report.py
-# @author 1532052420
 # @description 
-# @github https://github.com/1532052420
 # @created 2021-04-13T10:59:17.953Z+08:00
 # @last-modified 2023-03-27T18:18:26.631Z+08:00
 #

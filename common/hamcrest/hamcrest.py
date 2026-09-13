@@ -1,8 +1,6 @@
 #
 # hamcrest.py
-# @author 1532052420
 # @description 
-# @github https://github.com/1532052420
 # @created 2022-11-08T18:13:31.156Z+08:00
 # @last-modified 2022-11-09T17:04:40.225Z+08:00
 #

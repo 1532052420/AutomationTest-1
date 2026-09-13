@@ -1,7 +1,5 @@
 #-*- coding:utf8 -*-
-# 作者 1532052420
 # 创建时间 2018/01/19 22:36
-# github https://github.com/1532052420
 from base.read_app_ui_config import Read_APP_UI_Config
 from base.read_app_ui_devices_info import Read_APP_UI_Devices_Info
 from common.httpclient.doRequest import DoRequest

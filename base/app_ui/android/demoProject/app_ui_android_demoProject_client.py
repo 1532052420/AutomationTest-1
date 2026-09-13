@@ -1,5 +1,4 @@
 # -*- coding:utf-8 -*-
-# 作者 1532052420
 # 创建时间 2018/01/19 22:36
 from base.app_ui.android.demoProject.app_ui_android_demoProject_read_config import APP_UI_Android_DemoProject_Read_Config
 from appium import webdriver

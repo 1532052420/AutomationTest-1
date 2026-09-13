@@ -7,6 +7,7 @@ const state = {
   shot: null,
   selUid: null, selNode: null,
   hitCands: null,
+  serial: null,           // 当前操作的设备序列号（多设备切换；null=服务端默认第一台）
   pages: [],              // 现有页面文件
   eleFiles: [],           // 现有元素文件
   elementsAll: {},        // { 元素文件: [元素名...] }
@@ -110,6 +111,9 @@ function setupEmbedBar() {
   });
   const dv = $('dev-info');
   if (dv) bar.appendChild(dv);
+  // 多设备切换下拉也搬进内嵌工具条（内嵌/独立两种形态都有设备切换入口）
+  const devSel = $('device-sel');
+  if (devSel) { devSel.style.maxWidth = '200px'; bar.appendChild(devSel); }
 }
 
 async function init() {
@@ -117,12 +121,15 @@ async function init() {
   // 「返回平台」链接跟随实际访问地址（写死 127.0.0.1 的话，局域网同事点了会指向他自己机器）
   const bp = document.querySelector('.back-platform');
   if (bp) bp.href = location.protocol + '//' + location.hostname + ':8090/';
-  const st = await fetch('/api/status').then(r => r.json()).catch(() => null);
+  // 先加载设备下拉并确定 state.serial（恢复上次选中），status/refresh 都按它请求
+  await loadDevices();
+  const st = await fetch('/api/status?serial=' + encodeURIComponent(state.serial || '')).then(r => r.json()).catch(() => null);
   const devInfo = $('dev-info');
   // 版本号以服务端为准（页面缓存旧版本时也能纠正显示）
   if (st && st.version) $('app-version').textContent = st.version;
   if (st && st.ok) {
-    devInfo.textContent = '📱 ' + st.device.model + ' | ' + st.device.serial + ' | Android ' + st.device.platformVersion;
+    state.serial = st.serial || state.serial;
+    devInfo.textContent = '📱 ' + st.device.model + ' | Android ' + st.device.platformVersion;
     devInfo.className = 'dev-info ok';
   } else {
     devInfo.textContent = st ? st.msg : '连接失败';
@@ -144,6 +151,9 @@ async function init() {
     applyShotSize();
   }
   $('btn-tap').addEventListener('click', onTapElement);      // ▶ 设备上点击
+  // 多设备切换下拉（判空防御：浏览器缓存了旧版 index.html 时该下拉不存在）
+  const devSel = document.getElementById('device-sel');
+  if (devSel) devSel.addEventListener('change', onDeviceChange);
   $('tree-search').addEventListener('input', onTreeSearch);
   $('tut-search').addEventListener('input', onTutSearch);
   $('btn-add').addEventListener('click', openModal);
@@ -354,14 +364,74 @@ function bindHelpIcons() {
   tip.addEventListener('mouseleave', () => { tip.style.display = 'none'; tipOn = false; });
 }
 
+/* ---------- 多设备切换 ---------- */
+async function loadDevices() {
+  const sel = $('device-sel');
+  if (!sel) return;
+  const r = await fetch('/api/devices').then(r => r.json()).catch(() => null);
+  if (!r || !r.ok || !(r.devices || []).length) {
+    sel.innerHTML = '<option value="">无设备</option>';
+    return;
+  }
+  sel.innerHTML = r.devices.map(d =>
+    '<option value="' + esc(d.serial) + '">' + esc(d.model) + ' · Android ' + esc(d.platformVersion) + '</option>').join('');
+  // 恢复上次选中的设备（同一台服务器上刷新页面不跳回第一台）
+  let want = null;
+  try { want = localStorage.getItem('locator_serial'); } catch (e) {}
+  if (want && r.devices.some(d => d.serial === want)) {
+    sel.value = want;
+    state.serial = want;
+  } else if (!state.serial && r.devices.length) {
+    state.serial = r.devices[0].serial;
+    sel.value = state.serial;
+  }
+}
+/* 切换设备：立即清掉上一台设备的痕迹（旧截图/选中态/元素树），
+   避免新截图回来前点到旧图造成坐标错位；然后马上刷新新设备画面 */
+function onDeviceChange() {
+  const sel = $('device-sel');
+  const serial = sel.value;
+  if (!serial || serial === state.serial) return;
+  state.serial = serial;
+  try { localStorage.setItem('locator_serial', serial); } catch (e) {}
+  // 清旧设备痕迹
+  state.tree = null; state.all = [];
+  state.selUid = null; state.selNode = null; state.hitCands = null;
+  $('shot').style.display = 'none';
+  $('shot-overlay').style.display = 'none';
+  $('detail').style.display = 'none';
+  $('shot-empty').style.display = 'block';
+  $('shot-empty').textContent = '正在切换设备…';
+  $('tree').innerHTML = '';
+  const dv = $('dev-info');
+  dv.textContent = '切换中…'; dv.className = 'dev-info';
+  refresh();
+}
+
 /* ---------- 刷新：截图 + 元素树 ---------- */
 async function refresh() {
   $('btn-refresh').textContent = '刷新中…'; $('btn-refresh').disabled = true;
   try {
-    const r = await fetch('/api/refresh', { method: 'POST' }).then(r => r.json()).catch(() => null);
+    const r = await fetch('/api/refresh', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ serial: state.serial }),
+    }).then(r => r.json()).catch(() => null);
     if (!r || !r.ok) {
       alert(r && r.msg ? r.msg : '刷新失败');
       return;
+    }
+    // 掉线回退校正：请求的是 A，服务端回的是 B（A 已掉线）→ 更正下拉并提示
+    if (r.serial && r.serial !== state.serial) {
+      const sel = $('device-sel');
+      if (sel && sel.querySelector('option[value="' + r.serial + '"]')) {
+        sel.value = r.serial;
+        state.serial = r.serial;
+        try { localStorage.setItem('locator_serial', r.serial); } catch (e) {}
+        const dv = $('dev-info');
+        dv.textContent = '⚠ 原设备已掉线，已切换到第一台在线设备';
+        dv.className = 'dev-info bad';
+      }
     }
     state.width = r.width; state.height = r.height;
     state.tree = r.tree; state.all = r.all || [];
@@ -443,8 +513,10 @@ async function onTapElement() {
 async function tapOnDevice(center, label) {
   if (!center || center.length < 2) return;
   const x = center[0], y = center[1];
-  const r = await fetch('/api/tap', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ x: x, y: y }) })
-    .then(r => r.json()).catch(() => null);
+  const r = await fetch('/api/tap', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ x: x, y: y, serial: state.serial }),
+  }).then(r => r.json()).catch(() => null);
   const tip = $('tap-tip');
   if (r && r.ok) {
     tip.textContent = '✓ 已点击设备（' + label + '）(' + x + ',' + y + ')，刷新中…';

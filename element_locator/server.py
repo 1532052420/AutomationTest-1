@@ -23,7 +23,7 @@ from tutorials import TUTORIALS, search_tutorials
 app = Flask(__name__, static_folder='static', static_url_path='/static')
 
 # 元素定位器版本号：每次功能/修复后递增，左上角会显示，用来确认本地是否已更新
-APP_VERSION = 'v2.25'
+APP_VERSION = 'v3.0'
 
 # 开发工具要能"改完即刷"，静态文件禁用浏览器强缓存（Flask 默认 max-age=12h）
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
@@ -57,9 +57,16 @@ def _serialize(node, with_children=True):
     return d
 
 
+def _request_serial():
+    """前端指定的设备序列号（JSON body 或 query 的 serial），缺省回退第一台在线设备"""
+    data = request.get_json(silent=True) or {}
+    serial = (data.get('serial') or request.args.get('serial') or '').strip()
+    return serial or None
+
+
 def _refresh_payload():
-    """截图 + 元素树 完整载荷"""
-    serial = device.get_device()
+    """截图 + 元素树 完整载荷（按前端指定的设备；设备掉线自动回退第一台）"""
+    serial = device.get_device(_request_serial())
     if not serial:
         return None
     png = device.screenshot_png(serial)
@@ -74,6 +81,7 @@ def _refresh_payload():
     for n in data['all']:
         n['locators'] = device.gen_locators(n, data['all'])
     return {
+        'serial': serial,
         'device': device.device_info(serial),
         'screenshot': 'data:image/png;base64,' + base64.b64encode(png).decode() if png else '',
         'width': data['width'],
@@ -88,13 +96,20 @@ def index():
     return send_file(os.path.join(app.static_folder, 'index.html'))
 
 
+@app.route('/api/devices')
+def api_devices():
+    """全部在线设备（多设备切换下拉数据源）"""
+    return jsonify({'ok': True, 'devices': device.list_devices()})
+
+
 @app.route('/api/status')
 def api_status():
-    serial = device.get_device()
+    serial = device.get_device(_request_serial())
     if not serial:
         return jsonify({'ok': False, 'version': APP_VERSION,
                         'msg': '未检测到已授权的 Android 设备，请连接手机并允许 USB 调试'})
-    return jsonify({'ok': True, 'version': APP_VERSION, 'device': device.device_info(serial)})
+    return jsonify({'ok': True, 'version': APP_VERSION, 'serial': serial,
+                    'device': device.device_info(serial)})
 
 
 @app.route('/api/refresh', methods=['POST'])
@@ -198,8 +213,8 @@ def api_pages():
 
 @app.route('/api/tap', methods=['POST'])
 def api_tap():
-    """设备真实点击（验证定位）：POST {x, y} 设备坐标"""
-    serial = device.get_device()
+    """设备真实点击（验证定位）：POST {x, y, serial?} 设备坐标（serial 缺省回退第一台）"""
+    serial = device.get_device(_request_serial())
     if not serial:
         return jsonify({'ok': False, 'msg': '未检测到设备'})
     data = request.get_json(silent=True) or {}
@@ -207,7 +222,8 @@ def api_tap():
     if x is None or y is None:
         return jsonify({'ok': False, 'msg': '缺少坐标 x/y'})
     ok = device.tap(serial, x, y)
-    return jsonify({'ok': ok, 'msg': '已点击设备 (%d, %d)' % (x, y) if ok else '点击失败'})
+    return jsonify({'ok': ok, 'serial': serial,
+                    'msg': '已点击设备 (%d, %d)' % (x, y) if ok else '点击失败'})
 
 
 @app.route('/api/tutorials')

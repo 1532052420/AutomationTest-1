@@ -74,6 +74,13 @@ class ExecutionManager(object):
             task = self._tasks.get(run_id)
             if task:
                 return self._public_task(task)
+        # 命令行执行导入任务：动态扫描 output/app_ui，不落 output/runs
+        if run_id and run_id.startswith('cli-'):
+            for t in self._load_cli_tasks():
+                if t['run_id'] == run_id:
+                    t['evidence'] = self._evidence_for(run_id, t.get('allure_dir'))
+                    return t
+            return None
         # 服务重启后内存态丢失，从磁盘 result.json 回退（历史任务只读）
         return self._load_disk_task(run_id)
 
@@ -100,10 +107,13 @@ class ExecutionManager(object):
             return None
 
     def list_tasks(self, limit=100):
-        """历史任务（内存态 + 磁盘 result.json 合并），按 run_id 倒序"""
+        """历史任务（内存态 + 磁盘 result.json + 命令行执行导入 合并），按 run_id 倒序"""
         from_disk = self._load_disk_tasks()
+        from_cli = self._load_cli_tasks()
+        for t in from_disk + from_cli:   # 锁外补 evidence（有 mtime 缓存，避免锁内文件 IO）
+            t['evidence'] = self._evidence_for(t['run_id'], t.get('allure_dir'))
         with self._lock:
-            tasks = list(from_disk)
+            tasks = list(from_disk) + list(from_cli)
             mem_ids = set()
             for t in self._tasks.values():
                 mem_ids.add(t['run_id'])
@@ -125,13 +135,111 @@ class ExecutionManager(object):
         if not os.path.isdir(RUNS_DIR):
             return tasks
         for name in os.listdir(RUNS_DIR):
-            result_path = os.path.join(RUNS_DIR, name, 'result.json')
+            run_dir = os.path.join(RUNS_DIR, name)
+            result_path = os.path.join(run_dir, 'result.json')
             if os.path.isfile(result_path):
                 try:
                     with open(result_path, 'r', encoding='utf-8') as f:
                         tasks.append(self._normalize_disk_task(ujson.loads(f.read())))
                 except Exception:
                     continue
+            elif os.path.isdir(os.path.join(run_dir, 'allure-results')):
+                # 中断任务：平台进程被杀时 result.json 未落盘——生成 ERROR 伪记录，
+                # 避免该目录被静默跳过、执行记录永久不可见
+                tasks.append(self._normalize_disk_task({
+                    'run_id': name, 'status': 'RUNNING',
+                    'start_time': None, 'end_time': None,
+                    'conf_file': '', 'device_desc': '', 'device_model': '',
+                    'app_package': '', 'udid': '', 'overrides': [], 'case_nodes': [],
+                    'total': 0, 'passed': 0, 'failed': 0, 'error': 0, 'skipped': 0,
+                    'exit_code': -1, 'error_msg': '',
+                    'allure_dir': os.path.relpath(os.path.join(run_dir, 'allure-results'), BASE_DIR),
+                    'log_path': '', 'report_dir': '', 'stop_requested': False,
+                }))
+        return tasks
+
+    def cli_results_dir(self, run_id):
+        """命令行执行导入任务对应的 allure-results 目录。
+        run_id 形如 cli-<设备>-<包名>；直接遍历 output/app_ui 结构做精确匹配
+        （不用字符串切分——设备名/包名含 - 时切分会错），并对每段做字符集校验防路径穿越。"""
+        if not run_id or not run_id.startswith('cli-'):
+            return None
+        safe_re = re.compile(r'^[A-Za-z0-9_.]+$')
+        base = os.path.join(BASE_DIR, 'output', 'app_ui')
+        if not os.path.isdir(base):
+            return None
+        for device in os.listdir(base):
+            if not safe_re.match(device):
+                continue
+            dev_dir = os.path.join(base, device)
+            if not os.path.isdir(dev_dir):
+                continue
+            for pkg in os.listdir(dev_dir):
+                if not safe_re.match(pkg):
+                    continue
+                if 'cli-%s-%s' % (device, pkg) == run_id:
+                    path = os.path.join(dev_dir, pkg, 'report_data')
+                    return path if os.path.isdir(path) else None
+        return None
+
+    def _load_cli_tasks(self):
+        """导入命令行执行（./run.sh app 写 output/app_ui/<设备>/<包名>/report_data 的 allure-results）
+        为 source='cli' 的只读任务——修复"命令行跑完用例、平台没有测试数据"的双轨问题（保留最近一次）。
+        性能：首页每 8s 轮询 /api/runs 都会走到这里，按目录 mtime 做缓存，未变化不重复解析 JSON。"""
+        import glob as _glob
+        from web_platform import report_data
+        tasks = []
+        base = os.path.join(BASE_DIR, 'output', 'app_ui')
+        if not os.path.isdir(base):
+            return tasks
+        cache = getattr(self, '_cli_cache', None)
+        if cache is None:
+            cache = self._cli_cache = {}
+        for results_dir in sorted(_glob.glob(os.path.join(base, '*', '*', 'report_data'))):
+            if not os.path.isdir(results_dir):
+                continue
+            try:
+                mtime = os.path.getmtime(results_dir)
+            except OSError:
+                continue
+            cached = cache.get(results_dir)
+            if cached and cached['mtime'] == mtime:
+                tasks.append(cached['task'])
+                continue
+            try:
+                cases = report_data.list_cases_in_dir(results_dir)
+            except Exception:
+                continue
+            if not cases:
+                continue
+            rel = os.path.relpath(results_dir, base).split(os.sep)
+            if len(rel) < 3:
+                continue
+            device, pkg = rel[0], rel[1]
+            starts = [c['start'] for c in cases if c.get('start')]
+            stops = [c['stop'] for c in cases if c.get('stop')]
+            passed = sum(1 for c in cases if c['status'] == 'passed')
+            failed = sum(1 for c in cases if c['status'] == 'failed')
+            error = sum(1 for c in cases if c['status'] == 'broken')
+            skipped = sum(1 for c in cases if c['status'] == 'skipped')
+            status = 'PASSED' if (failed + error) == 0 else 'FAILED'
+            task = {
+                'run_id': 'cli-%s-%s' % (device, pkg), 'status': status,
+                # 时间格式化成与平台任务一致的字符串（前端 fmtTime 只做字符串切片）
+                'start_time': time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(min(starts) / 1000.0)) if starts else None,
+                'end_time': time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(max(stops) / 1000.0)) if stops else None,
+                'conf_file': '命令行执行（./run.sh app）', 'device_desc': device,
+                'device_model': device, 'app_package': pkg, 'udid': '',
+                'overrides': {}, 'case_nodes': [],
+                'total': len(cases), 'passed': passed, 'failed': failed,
+                'error': error, 'skipped': skipped,
+                'exit_code': 0, 'error_msg': '',
+                'allure_dir': os.path.relpath(results_dir, BASE_DIR),
+                'log_path': '', 'report_dir': '', 'stop_requested': False,
+                'source': 'cli',
+            }
+            cache[results_dir] = {'mtime': mtime, 'task': task}
+            tasks.append(task)
         return tasks
 
     def _public_task(self, task):
@@ -159,6 +267,8 @@ class ExecutionManager(object):
             'log_path': task['log_path'],
             'report_dir': task['report_dir'],
             'stop_requested': task['stop_requested'],
+            'source': task.get('source', 'platform'),
+            'evidence': self._evidence_for(task['run_id'], task.get('allure_dir')) if task.get('allure_dir') else None,
         }
 
     def get_log(self, run_id, offset=0):
@@ -169,6 +279,11 @@ class ExecutionManager(object):
             if task:
                 lines = task['log_lines']
                 return {'ok': True, 'lines': lines[offset:], 'offset': len(lines)}
+        if run_id and run_id.startswith('cli-'):
+            return {'ok': True,
+                    'lines': ['命令行执行导入：无平台实时日志。',
+                              '用例数据见「用例执行记录」；allure 原始结果在 output/app_ui/ 对应目录。'],
+                    'offset': 0}
         disk = self._load_disk_task(run_id)
         if disk and disk.get('log_path'):
             path = os.path.join(BASE_DIR, disk['log_path'])
@@ -499,9 +614,61 @@ class ExecutionManager(object):
         return True, '已清空 %d 条执行记录' % removed
 
     # ------------------------------------------------------------------ 报告
+    def _evidence_for(self, run_id, allure_dir):
+        """任务的证据统计 {shots, videos}（按目录 mtime 缓存，供报告列表展示）。"""
+        from web_platform import report_data
+        abs_dir = os.path.join(BASE_DIR, allure_dir) if allure_dir and not os.path.isabs(allure_dir) else allure_dir
+        if not abs_dir or not os.path.isdir(abs_dir):
+            return None
+        cache = getattr(self, '_ev_cache', None)
+        if cache is None:
+            cache = self._ev_cache = {}
+        try:
+            mtime = os.path.getmtime(abs_dir)
+        except OSError:
+            return None
+        hit = cache.get(abs_dir)
+        if hit and hit['mtime'] == mtime:
+            return hit['stats']
+        stats = report_data.run_stats(abs_dir)
+        if stats:
+            cache[abs_dir] = {'mtime': mtime, 'stats': stats}
+        return stats
+
+    def report_dir_for(self, run_id):
+        """run 的 Allure 报告输出目录：平台任务在 output/runs/<id>/report，
+        命令行导入任务与其 allure 数据同目录（output/app_ui/<设备>/<包名>/report）"""
+        cli = self.cli_results_dir(run_id)
+        if cli:
+            return os.path.join(os.path.dirname(cli), 'report')
+        return os.path.join(RUNS_DIR, run_id, 'report')
+
     def generate_report(self, run_id):
-        """生成 run 的 Allure 报告（allure generate 到 run/report/）并返回报告目录。
-        支持历史任务（内存无则从磁盘 result.json 取 allure_dir）。返回 (ok, msg)"""
+        """生成 run 的 Allure 报告（allure generate 到 report 目录）并返回报告目录。
+        支持历史任务（内存无则从磁盘 result.json 取 allure_dir）与命令行导入任务。
+        返回 (ok, msg_or_report_dir)"""
+        cli_results = self.cli_results_dir(run_id)
+        if cli_results:
+            # 命令行导入任务：allure 数据在其 report_data 目录，报告生成到旁边 report/
+            report_dir = self.report_dir_for(run_id)
+            if not os.path.isdir(cli_results):
+                return False, '没有 Allure 结果数据(%s)' % cli_results
+            shutil.rmtree(report_dir, ignore_errors=True)
+            os.makedirs(report_dir, exist_ok=True)
+            cmd = ['allure', 'generate', cli_results, '-o', report_dir, '--clean']
+            try:
+                p = subprocess.run(cmd, cwd=BASE_DIR, capture_output=True, timeout=120)
+            except Exception as e:
+                return False, 'allure generate 失败: %s' % e
+            if p.returncode != 0:
+                return False, 'allure generate 失败: %s' % p.stderr.decode('utf-8', 'ignore')[-500:]
+            for t in self._load_cli_tasks():
+                if t['run_id'] == run_id:
+                    cache = self._cli_cache.get(cli_results)
+                    if cache:
+                        cache['task']['report_dir'] = os.path.relpath(report_dir, BASE_DIR)
+                    break
+            return True, report_dir
         with self._lock:
             task = self._tasks.get(run_id)
             disk = None

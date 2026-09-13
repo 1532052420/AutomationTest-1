@@ -557,7 +557,7 @@ async function openModal() {
     .map(t => '<option value="' + t + '"' + (t === loc.type ? ' selected' : '') + '>' + t + '</option>').join('');
   $('el-value').value = loc.value;
   // 等待时间：每次打开弹窗恢复框架默认 30（上一个元素的设置不串扰）
-  $('el-wait-sec').value = 30;
+  $('el-wait-sec').value = 6;
   $('el-result').className = 'el-result'; $('el-result').textContent = '';
   $('el-content').textContent = '';
   // 写入文件默认定位器自己的元素库文件（避免误写进框架自带文件；③ 会在选目标用例后自动对齐）

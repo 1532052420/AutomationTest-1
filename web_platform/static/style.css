@@ -358,3 +358,36 @@ html.day button.ghost:hover { background: rgba(0,0,0,.07); color: #111; }
 html.day button:disabled { background: #d4d4d8; color: #8e8e93; }
 html.day .mtree-item:hover { background: rgba(0,0,0,.05); }
 html.day .st-PENDING { background: #a1a1aa; }
+
+
+/* ---------------- 执行配置参数帮助：问号 icon + 悬停气泡 ---------------- */
+.help-icon {
+  display: inline-block; width: 15px; height: 15px; line-height: 15px; text-align: center;
+  font-size: 11px; font-weight: 700; color: #6b7280; background: #e5e7eb;
+  border-radius: 50%; cursor: default; margin-left: 5px; user-select: none; vertical-align: 1px;
+}
+.help-icon:hover { background: #d1d5db; color: #111827; cursor: default; }
+.help-tip {
+  position: fixed; z-index: 9999; max-width: 380px; padding: 9px 12px;
+  font-size: 12.5px; line-height: 1.6; color: #111827;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid #d1d5db; border-radius: 8px;
+  box-shadow: 0 6px 20px rgba(0,0,0,.15);
+  pointer-events: auto; user-select: text; cursor: default;
+}
+.help-tip .tip-copy {
+  float: right; margin-left: 10px; padding: 1px 8px; font-size: 11px;
+  border: 1px solid #cbd5e1; border-radius: 5px; background: #f8fafc;
+  color: #374151; cursor: pointer;
+}
+.help-tip .tip-copy:hover { background: #eef2ff; }
+.help-tip .tip-copy.copied { color: #059669; border-color: #6ee7b7; }
+
+
+/* ---------------- 详情页高级信息（原始数据路径） ---------------- */
+details.adv-info { margin-top: 14px; border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; }
+details.adv-info summary { cursor: pointer; font-size: 12.5px; color: #6b7280; user-select: none; }
+details.adv-info summary:hover { color: #111827; }
+details.adv-info .kv { display: flex; align-items: center; gap: 10px; padding: 6px 0; font-size: 12.5px; }
+details.adv-info .kv span { color: #6b7280; flex: 0 0 110px; }
+details.adv-info .kv code { flex: 1; word-break: break-all; color: #374151; }

@@ -109,8 +109,8 @@
               <option value="ELEMENT_TO_BE_CLICKABLE">ELEMENT_TO_BE_CLICKABLE（可点击）</option>
             </select>
           </label>
-          <label>等待时间(秒) <span class="help-icon" data-help="等待方式最多等多少秒（框架默认 30）。元素找到的瞬间就继续执行——所以有的操作快、有的慢；一直没找到就等满这里填的秒数才报错。加载慢的页面调大，想快点暴露定位问题调小。">?</span>
-            <input id="el-wait-sec" type="number" min="1" max="600" step="1" value="30">
+          <label>等待时间(秒) <span class="help-icon" data-help="等待方式最多等多少秒（默认 6，慢页面元素可单独调大）。元素找到的瞬间就继续执行——所以有的操作快、有的慢；一直没找到就等满这里填的秒数才报错。加载慢的页面调大，想快点暴露定位问题调小。">?</span>
+            <input id="el-wait-sec" type="number" min="1" max="600" step="1" value="6">
           </label>
           <label>元素备注 <span class="help-icon" data-help="这个元素是什么（如「登录页-手机号输入框」），写在元素库生成行的行尾注释里，以后回看元素库一眼知道每个元素是干嘛的。可不填。">?</span>
             <input id="el-comment" type="text" placeholder="如: 登录页-登录按钮（可不填）">

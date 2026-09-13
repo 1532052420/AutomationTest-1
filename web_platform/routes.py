@@ -2,8 +2,8 @@
 """Web 执行平台 · 页面与 API 路由"""
 import atexit
 import os
-import re
 import shutil
+import re
 import subprocess
 import sys
 import time
@@ -243,13 +243,15 @@ def api_run_log(run_id):
 @bp.route('/api/run/<run_id>/cases')
 def api_run_cases(run_id):
     """自建「用例执行记录」：解析 allure-results，返回用例+step+断言截图（不依赖 allure 命令行）"""
-    return jsonify({'ok': True, 'cases': report_data.list_run_cases(run_id)})
+    results_dir = runner.manager.cli_results_dir(run_id)   # 命令行执行导入任务的目录
+    return jsonify({'ok': True, 'cases': report_data.list_run_cases(run_id, results_dir)})
 
 
 @bp.route('/api/runs/<run_id>/res/<path:source>')
 def api_run_attachment(run_id, source):
     """alure-results 附件（断言截图）服务；source 严格限制在结果目录内，防路径穿越"""
-    p = report_data.resolve_attachment_path(run_id, source)
+    results_dir = runner.manager.cli_results_dir(run_id)
+    p = report_data.resolve_attachment_path(run_id, source, results_dir)
     if not p:
         return jsonify({'ok': False, 'msg': '附件不存在'}), 404
     return send_file(p)
@@ -270,6 +272,46 @@ def api_generate_report(run_id):
     return jsonify({'ok': True, 'report_dir': msg})
 
 
+@bp.route('/api/appium/start', methods=['POST'])
+def api_appium_start():
+    """启动 Appium 服务（127.0.0.1:4726）：已在运行直接返回；未运行则后台拉起并等服务就绪。
+    与 ./run.sh start-appium 等价（供执行页「启动 Appium」按钮调用）。"""
+    ok, msg = check_appium('127.0.0.1', '4726')
+    if ok:
+        return jsonify({'ok': True, 'msg': 'Appium 已在运行', 'already': True})
+    appium_bin = os.path.expanduser('~/appium2/node_modules/.bin/appium')
+    if not os.path.isfile(appium_bin):
+        appium_bin = shutil.which('appium') or ''
+    if not appium_bin or not os.path.isfile(appium_bin):
+        return jsonify({'ok': False, 'msg': '未找到 appium 可执行文件（~/appium2）'}), 400
+    log_dir = os.path.join(BASE_DIR, 'logs')
+    os.makedirs(log_dir, exist_ok=True)
+    log = open(os.path.join(log_dir, 'appium.log'), 'ab')
+    # 关键：注入 ANDROID_HOME——uiautomator2 驱动建会话时必需；
+    # 平台进程本身可能没有该环境变量（run.sh 才会 export），不注入会报
+    # "Neither ANDROID_HOME nor ANDROID_SDK_ROOT environment variable was exported"
+    sdk_root = os.environ.get('ANDROID_HOME') or os.path.expanduser('~/Library/Android/sdk')
+    appium_env = dict(os.environ)
+    appium_env.setdefault('ANDROID_HOME', sdk_root)
+    appium_env.setdefault('ANDROID_SDK_ROOT', sdk_root)
+    try:
+        subprocess.Popen([appium_bin, '--port', '4726', '--address', '127.0.0.1',
+                          '--base-path', '/wd/hub', '--log-level', 'info'],
+                         stdout=log, stderr=subprocess.STDOUT,
+                         start_new_session=True, cwd=BASE_DIR, env=appium_env)
+    except Exception as e:
+        return jsonify({'ok': False, 'msg': 'Appium 启动失败: %s' % e}), 500
+    finally:
+        log.close()
+    deadline = time.time() + 20
+    while time.time() < deadline:
+        ok, _ = check_appium('127.0.0.1', '4726')
+        if ok:
+            return jsonify({'ok': True, 'msg': 'Appium 已启动'})
+        time.sleep(0.5)
+    return jsonify({'ok': False, 'msg': 'Appium 启动超时，请查看 logs/appium.log'}), 500
+
+
 @bp.route('/api/run/<run_id>/report/open', methods=['POST'])
 def api_open_report(run_id):
     """确保报告生成后起本地静态服务，**等服务就绪**再返回地址（前端拿到即可直接打开）。
@@ -280,7 +322,7 @@ def api_open_report(run_id):
     task = runner.manager.get_task(run_id)
     if not task:
         return jsonify({'ok': False, 'msg': '任务不存在'}), 404
-    report_dir = os.path.join(runner.RUNS_DIR, run_id, 'report')
+    report_dir = runner.manager.report_dir_for(run_id)
     index_html = os.path.join(report_dir, 'index.html')
     # 未生成过则先生成
     if not os.path.isfile(index_html):
@@ -332,6 +374,9 @@ def api_runs():
 
 @bp.route('/api/runs/<run_id>', methods=['DELETE'])
 def api_delete_run(run_id):
+    if run_id.startswith('cli-'):
+        # 命令行执行导入的记录：数据源在 output/app_ui，删除会把用户唯一的 allure 数据清掉
+        return jsonify({'ok': False, 'msg': '命令行执行导入的记录不支持删除（数据源在 output/app_ui）'}), 400
     ok, msg = runner.manager.delete_run(run_id)
     return jsonify({'ok': ok, 'msg': msg}), 200 if ok else 400
 

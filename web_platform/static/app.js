@@ -33,6 +33,20 @@ function runStatsHtml(t) {
 }
 function fmtTime(s) { return s ? String(s).replace('T', ' ').slice(0, 19) : '-'; }
 
+/* 执行编号显示格式化：20260913_002 → 09-13 · 第2次；cli- 任务显示「CLI · 设备」。
+   存储层 id 不变（目录名/外键），仅显示层转换；title 悬停可看原始 id。 */
+function formatRunId(id) {
+  const s = String(id || '');
+  const m = s.match(/^(\d{4})(\d{2})(\d{2})_(\d+)$/);
+  if (m) return m[2] + '-' + m[3] + ' · 第' + parseInt(m[4], 10) + '次';
+  if (s.startsWith('cli-')) {
+    const rest = s.slice(4);
+    const i = rest.lastIndexOf('-');
+    return i > 0 ? 'CLI · ' + rest.slice(0, i) : s;
+  }
+  return s;
+}
+
 let _toastTimer = null;
 function toast(msg, ok = true) {
   const el = $('#toast');
@@ -161,7 +175,7 @@ async function refreshStats() {
 function runRowHtml(r, withOps) {
   const dev = r.device_model || r.device_desc || '-';
   return '<tr>' +
-    '<td><a class="runlink" href="/runs/' + esc(r.run_id) + '">' + esc(r.run_id) + '</a></td>' +
+    '<td><a class="runlink" href="/runs/' + esc(r.run_id) + '" title="原始编号: ' + esc(r.run_id) + '">' + esc(formatRunId(r.run_id)) + '</a></td>' +
     '<td>' + fmtTime(r.start_time) + '</td>' +
     '<td title="' + esc(dev) + ' · ' + esc(r.udid || '') + '">' + esc(dev) + '</td>' +
     '<td title="' + esc(r.app_package) + '">' + esc((r.app_package || '-').split('.').pop()) + '</td>' +
@@ -260,11 +274,90 @@ function refreshAfterOps() {
 }
 
 /* ---------------- 执行页（配置+设备+用例+记录 合并） ---------------- */
+/* Appium 状态徽标 + 启动按钮（执行配置区） */
+async function refreshAppiumBadge() {
+  const badge = $('#appiumBadge'), btn = $('#btnAppium');
+  if (!badge || !btn) return;
+  const d = await api('/api/status');
+  if (d.appium && d.appium.ok) {
+    badge.textContent = 'Appium 已就绪'; badge.className = 'pill ok';
+    btn.disabled = true; btn.textContent = '✓ 已启动';
+  } else {
+    badge.textContent = 'Appium 未启动'; badge.className = 'pill';
+    btn.disabled = false; btn.textContent = '🟢 启动 Appium';
+  }
+}
+/* 执行配置参数帮助：悬停问号显示获取途径命令；移出延迟 0.3s 消失，
+   期间移入气泡则保持可见，气泡内「复制」按钮可复制全文 */
+function bindParamHelp() {
+  let tip = document.getElementById('paramHelpTip');
+  if (!tip) {
+    tip = document.createElement('div');
+    tip.id = 'paramHelpTip';
+    tip.className = 'help-tip';
+    tip.style.display = 'none';
+    document.body.appendChild(tip);
+    tip.addEventListener('mouseenter', () => clearTimeout(tip._hideTimer));   // 移入气泡：取消隐藏
+    tip.addEventListener('mouseleave', () => {
+      tip._hideTimer = setTimeout(() => { tip.style.display = 'none'; }, 300);
+    });
+    tip.addEventListener('click', async (e) => {
+      const btn = e.target.closest('.tip-copy');
+      if (!btn) return;
+      const text = (tip.getAttribute('data-text') || '');
+      try { await navigator.clipboard.writeText(text); }
+      catch (err) {
+        const ta = document.createElement('textarea');
+        ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.select();
+        try { document.execCommand('copy'); } catch (e2) {}
+        document.body.removeChild(ta);
+      }
+      btn.textContent = '✓ 已复制'; btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = '复制'; btn.classList.remove('copied'); }, 1500);
+    });
+  }
+  document.querySelectorAll('.field .help-icon').forEach(icon => {
+    if (icon.dataset.bound) return;
+    icon.dataset.bound = '1';
+    icon.addEventListener('mouseenter', () => {
+      clearTimeout(tip._hideTimer);
+      const text = icon.getAttribute('data-help') || '';
+      tip.setAttribute('data-text', text);
+      // 文案 + 右上角复制按钮（复制全文，不含按钮字样）
+      tip.innerHTML = '<button class="tip-copy">复制</button>' + esc(text);
+      tip.style.display = 'block';
+      const r = icon.getBoundingClientRect();
+      const left = Math.min(r.left - 40, window.innerWidth - 400);
+      tip.style.left = Math.max(10, left) + 'px';
+      const top = r.bottom + 6;
+      const estH = text.length > 90 ? 150 : 90;
+      tip.style.top = (top + estH > window.innerHeight - 10 ? Math.max(10, r.top - estH - 10) : top) + 'px';
+    });
+    icon.addEventListener('mouseleave', () => {
+      clearTimeout(tip._hideTimer);
+      tip._hideTimer = setTimeout(() => { tip.style.display = 'none'; }, 300);   // 延迟 0.3s
+    });
+  });
+}
+
+async function startAppium() {
+  const btn = $('#btnAppium');
+  btn.disabled = true; btn.textContent = '⏳ 启动中…';
+  const d = await postJson('/api/appium/start', {});
+  toast(d.msg || (d.ok ? 'Appium 已启动' : '启动失败'), d.ok);
+  refreshAppiumBadge();
+}
+
 async function initRun() {
   renderSidebar('/run');
   await loadExecDefaults();
   await loadCaseTree();
   $('#btnStart').addEventListener('click', startRun);
+  $('#btnAppium').addEventListener('click', startAppium);
+  refreshAppiumBadge();
+  setInterval(refreshAppiumBadge, 10000);
+  bindParamHelp();
   $('#btnStop').addEventListener('click', stopRun);
   $('#btnSelectAll').addEventListener('click', () => setAllChecked(true));
   $('#btnSelectNone').addEventListener('click', () => setAllChecked(false));
@@ -377,11 +470,28 @@ function pollTask(runId) {
   }, 1500);
 }
 
+/* 日志降噪：按「对定位问题有没有用」过滤展示（原始日志文件不动）。
+   1) selenium 内部包装栈（errorhandler/check_response 的实现行）——只保留最终错误消息与 Appium 端 Stacktrace；
+   2) DeprecationWarning 兼容警告块——与业务失败无关；
+   3) live log 的分节头与无关空行——纯噪声 */
+function _logNoise(l) {
+  if (/^-{10,} live log (setup|call|teardown) -{10,}$/.test(l)) return true;
+  if (/^INFO     video_evidence:conftest\.py:85 录屏已开始/.test(l)) return false;  // 证据链保留
+  if (/DeprecationWarning: |warnings\.warn\(|appium_connection\.py:\d+|webdriver\.py:245/.test(l)) return true;
+  if (/super\(\)\.__init__\(remote_server_addr|pool_manager_init_args|setting remote_server_addr|get_timeout\(\) in RemoteConnection|desired_capabilities argument is deprecated/.test(l)) return true;
+  if (/^\s*-- Docs: https:\/\/docs\.pytest\.org.*warnings\.html\s*$/.test(l)) return true;
+  if (/^cases\/\S+::\S+$/.test(l) && !/PASSED|FAILED|ERROR|SKIPPED/.test(l)) return true; // warnings summary 的裸用例名行
+  if (/^\s*(:Args:|:Raises:|:Returns:|screen: str|status = response|value = None|value_json|exception_class|error_codes|if isinstance\(status|if isinstance\(value|if not value|if message == |screen = None|stacktrace = None|st_value = value|for error_code|error_info = |if not status|try:|except ValueError|if len\(value\) == 1|else:|pass$)/.test(l)) return true;
+  if (l.includes('errorhandler.py:')) return true;
+  if (/^\s*"screen" in value|^\s*"data" in value|^\s*"alert" in value/.test(l)) return true;
+  if (/^Captured log setup$|^Captured stdout setup$|^Captured log call$/.test(l)) return false; // 分节头保留
+  return false;
+}
 function renderLog(lines, boxSel) {
   const box = boxSel ? $(boxSel) : $('#logBox');
   if (!box || !lines.length) return;
   const nearBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 60;
-  lines.forEach(l => {
+  lines.filter(l => !_logNoise(l)).forEach(l => {
     let cls = '';
     if (/断言「.+」失败|FAILED|ERROR|TimeoutException|AssertionError/.test(l)) cls = 'fail';
     else if (/断言「.+」通过|PASSED/.test(l)) cls = 'pass';
@@ -462,12 +572,14 @@ async function renderRunDetail(sel, runId) {
   const t = d.task;
   const cases = c.ok ? c.cases : [];
   const running = t.status === 'RUNNING' || t.status === 'PENDING';
+  const isCli = t.source === 'cli';   // 命令行执行导入：无平台实时日志，不能生成报告/删除
   box.innerHTML =
     '<div class="card">' +
-    '<div class="cardhead"><h3>用例执行记录 <span class="muted">· ' + esc(runId) + '</span></h3>' +
+    '<div class="cardhead"><h3>用例执行记录 <span class="muted">· ' + esc(runId) + '</span>' +
+    (isCli ? ' <span class="pill">命令行执行导入</span>' : '') + '</h3>' +
     '<div class="ops">' +
     '<button class="ghost mini" onclick="openReportFor(\'' + esc(runId) + '\', this)">打开报告</button>' +
-    '<button class="mini danger-ghost" onclick="deleteRunFor(\'' + esc(runId) + '\')">删除本记录</button>' +
+    (isCli ? '' : '<button class="mini danger-ghost" onclick="deleteRunFor(\'' + esc(runId) + '\')">删除本记录</button>') +
     '</div></div>' +
     '<div class="meta"><span>状态 ' + statusBadge(t.status) + '</span>' +
     '<span>设备 <b>' + esc(t.device_model || t.device_desc) + ' / ' + esc(t.udid) + '</b></span>' +
@@ -481,8 +593,53 @@ async function renderRunDetail(sel, runId) {
       '</tbody></table></div>' :
       '<div class="empty mt"><span class="eico">📄</span>该 run 没有用例数据（allure-results 缺失或已删除）</div>') +
     '</div>' +
-    '<div class="card"><div class="cardhead"><h3>执行日志 <span class="muted" id="logCount"></span></h3></div>' +
-    '<div class="logbox" id="detailLogBox"></div></div>';
+    '<div class="card"><div class="cardhead"><h3>执行日志 <span class="muted" id="logCount"></span>' +
+    '<button class="ghost mini" id="btnCopyLog" style="margin-left:10px">📋 复制日志</button></h3></div>' +
+    '<div class="logbox" id="detailLogBox"></div></div>' +
+    '<details class="adv-info"><summary>高级信息（原始数据路径，研发排障用）</summary>' +
+    '<div class="kv"><span>Allure 数据路径</span>' +
+    '<code>' + esc(t.allure_dir || '-') + '</code>' +
+    '<button class="ghost mini" data-copy="' + esc(t.allure_dir || '') + '">复制</button></div>' +
+    '<div class="kv"><span>报告目录</span>' +
+    '<code>' + esc(t.report_dir || (t.source === 'cli' ? '（打开报告时生成到 allure 数据同目录）' : 'output/runs/' + esc(runId) + '/report')) + '</code>' +
+    '<button class="ghost mini" data-copy="' + esc(t.report_dir || '') + '">复制</button></div>' +
+    '</details>';
+  // 高级信息路径复制
+  box.addEventListener('click', async (e) => {
+    const cp = e.target.closest('[data-copy]');
+    if (cp && cp.dataset.copy) {
+      try { await navigator.clipboard.writeText(cp.dataset.copy); }
+      catch (err) {
+        const ta = document.createElement('textarea');
+        ta.value = cp.dataset.copy; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.select();
+        try { document.execCommand('copy'); } catch (e2) {}
+        document.body.removeChild(ta);
+      }
+      const orig = cp.textContent; cp.textContent = '✓ 已复制';
+      setTimeout(() => { cp.textContent = orig; }, 1500);
+    }
+  });
+  // 复制日志（过滤后的展示内容）
+  box.addEventListener('click', async (e) => {
+    if (e.target.closest('#btnCopyLog')) {
+      const lb = document.getElementById('detailLogBox');
+      const text = lb ? lb.innerText : '';
+      const n = text.split('\n').length;
+      try {
+        await navigator.clipboard.writeText(text);
+        toast('日志已复制（' + n + ' 行）');
+      } catch (err) {
+        // 兜底：页面未聚焦等场景 Clipboard API 不可用，用隐藏 textarea + execCommand
+        const ta = document.createElement('textarea');
+        ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.select();
+        try { document.execCommand('copy'); toast('日志已复制（' + n + ' 行）'); }
+        catch (e2) { toast('复制失败：' + e2, false); }
+        document.body.removeChild(ta);
+      }
+    }
+  });
   // 用例行展开/收起（事件委托，避免 8s 轮询重建后按钮失效）
   box.addEventListener('click', (e) => {
     const b = e.target.closest('button[data-t]');
@@ -556,17 +713,24 @@ async function loadReportList() {
   if (_reportPage > pages) _reportPage = pages;
   if (_reportPage < 1) _reportPage = 1;
   const slice = runs.slice((_reportPage - 1) * PAGE_SIZE, _reportPage * PAGE_SIZE);
-  tb.innerHTML = slice.map(r =>
-    '<tr><td><a class="runlink" href="/runs/' + esc(r.run_id) + '">' + esc(r.run_id) + '</a></td>' +
+  tb.innerHTML = slice.map(r => {
+    const ev = r.evidence || null;
+    const evTxt = ev && (ev.shots || ev.videos)
+      ? (ev.shots ? '📸 ' + ev.shots + ' 图' : '') + (ev.shots && ev.videos ? ' · ' : '') + (ev.videos ? '🎬 ' + ev.videos + ' 视频' : '')
+      : '—';
+    return '<tr>' +
+    '<td><a class="runlink" href="/runs/' + esc(r.run_id) + '" title="原始编号: ' + esc(r.run_id) + '">' + esc(formatRunId(r.run_id)) + '</a></td>' +
     '<td>' + fmtTime(r.start_time) + '</td>' +
     '<td>' + statusBadge(r.status) + '</td>' +
-    '<td class="muted">' + esc(r.allure_dir || '-') + '</td>' +
-    '<td>' + (r.report_dir ? '<span style="color:#4ade80">已生成</span>' : '<span class="muted">未生成</span>') + '</td>' +
+    '<td>' + (ev && (ev.shots || ev.videos)
+      ? '<a class="runlink" href="/runs/' + esc(r.run_id) + '">' + esc(evTxt) + '</a>'
+      : '<span class="muted">—</span>') + '</td>' +
+    '<td><button class="ghost mini" onclick="openReportFor(\'' + esc(r.run_id) + '\', this)">打开报告</button></td>' +
     '<td><div class="ops">' +
     '<button class="ghost mini" onclick="showRunDetail(\'' + esc(r.run_id) + '\')">详情</button>' +
-    '<button class="ghost mini" onclick="openReportFor(\'' + esc(r.run_id) + '\', this)">打开报告</button>' +
     '<button class="mini danger-ghost" onclick="deleteRunFor(\'' + esc(r.run_id) + '\')">删除数据</button>' +
-    '</div></td></tr>').join('');
+    '</div></td></tr>';
+  }).join('');
   renderPager('#reportPager', _reportPage, pages, (p) => { _reportPage = p; loadReportList(); }, runs.length);
 }
 

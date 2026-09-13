@@ -23,7 +23,7 @@ from tutorials import TUTORIALS, search_tutorials
 app = Flask(__name__, static_folder='static', static_url_path='/static')
 
 # 元素定位器版本号：每次功能/修复后递增，左上角会显示，用来确认本地是否已更新
-APP_VERSION = 'v2.23'
+APP_VERSION = 'v2.24'
 
 # 开发工具要能"改完即刷"，静态文件禁用浏览器强缓存（Flask 默认 max-age=12h）
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0

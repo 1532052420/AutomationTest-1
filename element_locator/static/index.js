@@ -163,7 +163,9 @@ async function init() {
   // 三栏字段变动 → 三个示例代码区实时刷新
   ['el-name', 'el-value', 'el-comment', 'el-case-comment'].forEach(id => $(id).addEventListener('input', updatePreview));
   $('el-op-comment').addEventListener('input', () => { opCommentAuto = false; updatePreview(); });
-  ['el-type', 'el-wait'].forEach(id => $(id).addEventListener('change', updatePreview));
+  $('el-wait').addEventListener('change', updatePreview);
+  // 定位方式切换：从当前元素的定位候选里取该类型的值回填（ID→ID值，XPATH→XPATH值…）
+  $('el-type').addEventListener('change', onElTypeChange);
   $('el-wait-sec').addEventListener('input', updatePreview);
   $('el-insert-pos').addEventListener('change', () => { renderStepsList(currentSteps()); updatePreview(); });
   // 顶部快速打开：用例 / 元素文件 / 页面操作 下拉打开编辑
@@ -630,6 +632,18 @@ function candName(n) {
 function selectedLocator() {
   const radio = document.querySelector('input[name="loc"]:checked');
   return radio ? { type: radio.dataset.lt, value: radio.dataset.val } : null;
+}
+/* 定位方式下拉切换 → 定位值联动：从当前元素生成的定位候选里找该类型的值。
+   同类型有多条时优先「唯一」标记的候选（如 resource-id 唯一 / text 唯一），否则取第一条；
+   该类型没有候选（如元素无 content-desc 时选 ACCESSIBILITY_ID）则保留原值不动。 */
+function onElTypeChange() {
+  const t = $('el-type').value;
+  const cands = ((state.selNode && state.selNode.locators) || []).filter(l => l.locator_type === t);
+  if (cands.length) {
+    const best = cands.find(c => (c.desc || '').indexOf('唯一') >= 0) || cands[0];
+    $('el-value').value = best.value;
+  }
+  updatePreview();
 }
 
 /* ---------- 添加到元素库 ---------- */

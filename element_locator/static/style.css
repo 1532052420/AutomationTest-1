@@ -360,3 +360,125 @@ html.night .dup-panel { background: #271c05; border-color: #a16207; }
 html.night .dup-tip { background: #271c05; border-color: #a16207; color: #fbbf24; }
 html.night .dup-tip code { background: #3a2c05; }
 html.night ::-webkit-scrollbar-thumb { background: #3a3c42; }
+
+
+/* ═══════════════════════════════════════════════════════════════════
+   v2.1 UI 升级（后置覆盖）：对齐测试平台 v2.0 设计语言（sky 品牌渐变/光晕/彩条）
+   本次仅动 UI（CSS），业务 JS 与后端零改动；日间=默认浅色 / 夜间=html.night
+   ═══════════════════════════════════════════════════════════════════ */
+:root {
+  --sky: #0284c7; --sky-2: #38bdf8; --sky-deep: #0369a1;
+  --grad-sky: linear-gradient(135deg, #0ea5e9, #38bdf8);
+  --grad-sky-hover: linear-gradient(135deg, #38bdf8, #7dd3fc);
+  --radius-lg: 14px; --radius-md: 10px; --radius-sm: 7px;
+}
+
+/* 页面背景：微妙品牌光晕 */
+body {
+  background:
+    radial-gradient(1100px 400px at 14% -6%, rgba(14,165,233,.08), transparent 60%),
+    radial-gradient(900px 360px at 96% -4%, rgba(99,102,241,.05), transparent 58%),
+    #f5f6f8;
+}
+
+/* ---------- 侧栏：品牌渐变点缀 ---------- */
+.back-platform { background: var(--grad-sky); border: none; color: #fff; box-shadow: 0 2px 10px rgba(14,165,233,.3); }
+.back-platform:hover { background: var(--grad-sky-hover); box-shadow: 0 4px 14px rgba(14,165,233,.4); transform: translateY(-1px); }
+.brand .bt { color: #f8fafc; }
+.ver { background: var(--grad-sky); border: none; color: #fff; border-radius: 999px; padding: 1px 8px; box-shadow: 0 2px 8px rgba(14,165,233,.3); }
+.side { border-right: none; box-shadow: 1px 0 0 rgba(255,255,255,.06), 4px 0 24px rgba(0,0,0,.25); }
+.side-btn { border-radius: var(--radius-md); }
+
+/* ---------- 三栏卡片：圆角/阴影/hover ---------- */
+.col { border-radius: var(--radius-lg); box-shadow: 0 1px 3px rgba(0,0,0,.08), 0 4px 14px rgba(0,0,0,.05); border: 1px solid rgba(0,0,0,.04); transition: box-shadow .2s, transform .2s; }
+.col:hover { box-shadow: 0 2px 6px rgba(0,0,0,.08), 0 8px 22px rgba(0,0,0,.08); }
+.col-title { background: linear-gradient(180deg, #fbfcfe, #f6f8fa); border-bottom: 1px solid #eef0f3; border-radius: var(--radius-lg) var(--radius-lg) 0 0; }
+.col-title::before { content: ""; display: inline-block; width: 4px; height: 13px; border-radius: 2px;
+  background: var(--grad-sky); margin-right: 7px; vertical-align: -1px; }
+
+/* ---------- 按钮体系 ---------- */
+.btn { border-radius: var(--radius-sm); transition: all .15s; }
+.btn:hover { transform: translateY(-1px); box-shadow: 0 3px 10px rgba(0,0,0,.1); }
+.btn.primary { background: var(--grad-sky); border: none; color: #fff; box-shadow: 0 2px 10px rgba(14,165,233,.32); }
+.btn.primary:hover { background: var(--grad-sky-hover); box-shadow: 0 4px 16px rgba(14,165,233,.42); }
+.btn.small { border-radius: var(--radius-sm); }
+
+/* ---------- 输入 focus 统一 sky ring ---------- */
+.toolbar input:focus, .mini-select:focus, .modal-body input:focus, .modal-body select:focus {
+  border-color: var(--sky-2); box-shadow: 0 0 0 3px rgba(56,189,248,.18);
+}
+
+/* ---------- 元素树：hover/选中 ---------- */
+.tree .tnode { border-radius: 6px; transition: background .1s; }
+.tree .tnode:hover { background: #eef6ff; }
+.tree .tnode.sel { background: linear-gradient(90deg, rgba(14,165,233,.16), rgba(56,189,248,.08));
+  box-shadow: inset 2.5px 0 0 var(--sky); }
+.tree .tnode.sel .t-text { color: var(--sky-deep); }
+.tree .tnode .clickable-badge { color: var(--sky); border-color: #bae6fd; background: #f0f9ff; }
+
+/* ---------- 命中候选 / 定位写法 ---------- */
+.cand-chip { border-radius: 999px; transition: all .12s; }
+.cand-chip.sel { background: var(--grad-sky); border: none; box-shadow: 0 2px 8px rgba(14,165,233,.3); }
+.loc-item { transition: border-color .12s, box-shadow .12s; }
+.loc-item:hover { border-color: #bae6fd; box-shadow: 0 2px 8px rgba(14,165,233,.08); }
+.loc-item code { background: #f0f9ff; }
+
+/* ---------- 教学卡 ---------- */
+.tut-leaf { transition: box-shadow .15s, border-color .15s; }
+.tut-leaf:hover { border-color: #bae6fd; box-shadow: 0 3px 12px rgba(14,165,233,.1); }
+.copy-btn { border-radius: 5px; }
+
+/* ---------- 弹窗精修 ---------- */
+.modal { border-radius: var(--radius-lg); box-shadow: 0 24px 64px rgba(0,0,0,.22); animation: pop .18s cubic-bezier(.2,.9,.3,1.2); }
+@keyframes pop { from { transform: scale(.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+.modal-title { background: linear-gradient(180deg, #fbfcfe, #f6f8fa); border-radius: var(--radius-lg) var(--radius-lg) 0 0; }
+.modal-foot { border-radius: 0 0 var(--radius-lg) var(--radius-lg); }
+.modal-foot .btn.primary, .modal-foot .btn:not(.ghost):first-child { box-shadow: 0 2px 10px rgba(14,165,233,.3); }
+
+/* ---------- 滚动条 ---------- */
+::-webkit-scrollbar { width: 9px; height: 9px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(0,0,0,.16); border-radius: 999px; border: 2px solid transparent; background-clip: content-box; }
+::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,.3); background-clip: content-box; }
+
+/* ---------- 截图区 ---------- */
+.shot-wrap { background: linear-gradient(180deg, #f2f5f8, #eef1f5); }
+
+/* ═════════ 夜间模式（html.night）同步升级 ═════════ */
+html.night body {
+  background:
+    radial-gradient(1100px 400px at 14% -6%, rgba(14,165,233,.09), transparent 60%),
+    radial-gradient(900px 360px at 96% -4%, rgba(99,102,241,.06), transparent 58%),
+    #101012;
+}
+html.night .col { background: #1a1b1e; border-color: rgba(255,255,255,.06);
+  box-shadow: 0 1px 3px rgba(0,0,0,.4), 0 4px 14px rgba(0,0,0,.25); }
+html.night .col-title { background: linear-gradient(180deg, #202126, #1b1c20); border-bottom-color: rgba(255,255,255,.06); }
+html.night .col-title .hint { color: #9ca3af; }
+html.night .toolbar input { background: #101012; border-color: rgba(255,255,255,.12); color: #e5e7eb; }
+html.night .tree .tnode:hover { background: rgba(255,255,255,.06); }
+html.night .tree .tnode.sel { background: linear-gradient(90deg, rgba(14,165,233,.2), rgba(56,189,248,.08));
+  box-shadow: inset 2.5px 0 0 var(--sky-2); }
+html.night .tree .tnode.sel .t-text { color: #7dd3fc; }
+html.night .tree .tnode .t-text { color: #e5e7eb; }
+html.night .detail { background: #1b1c20; border-top-color: rgba(255,255,255,.08); }
+html.night .attrs td { border-bottom-color: rgba(255,255,255,.05); }
+html.night .attrs td:first-child { color: #9ca3af; }
+html.night .loc-item { background: #1b1c20; border-color: rgba(255,255,255,.08); }
+html.night .loc-item code { background: #101012; color: #a5f3fc; }
+html.night .tut-leaf { background: #1b1c20; border-color: rgba(255,255,255,.07); }
+html.night .tut-leaf .tut-title { color: #f1f5f9; }
+html.night .cat-head { background: rgba(255,255,255,.05); color: #e5e7eb; }
+html.night .cat-head:hover { background: rgba(255,255,255,.09); }
+html.night .shot-wrap { background: linear-gradient(180deg, #17181b, #131417); }
+html.night .cand-chip { background: #1b1c20; border-color: rgba(255,255,255,.14); color: #e5e7eb; }
+html.night .modal { background: #1a1b1e; }
+html.night .modal-title { background: linear-gradient(180deg, #202126, #1b1c20); border-bottom-color: rgba(255,255,255,.06); }
+html.night .modal-title, html.night .modal-body label { color: #e5e7eb; }
+html.night .modal-body input, html.night .modal-body select { background: #101012; border-color: rgba(255,255,255,.12); color: #e5e7eb; }
+html.night .modal-foot { border-top-color: rgba(255,255,255,.06); }
+html.night .el-content { background: #101012; border-color: rgba(255,255,255,.08); color: #d1d5db; }
+html.night .el-result.ok { background: rgba(52,211,153,.12); color: #34d399; }
+html.night .el-result.err { background: rgba(248,113,113,.12); color: #f87171; }
+html.night ::-webkit-scrollbar-thumb { background: rgba(255,255,255,.14); background-clip: content-box; }
+html.night ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,.26); background-clip: content-box; }

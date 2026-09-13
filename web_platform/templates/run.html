@@ -24,9 +24,9 @@
         <select id="confSel"></select>
       </div>
       <div class="fields">
-        <div class="field"><label>设备编号（udid）<span class="help-icon" data-help="获取途径：手机开启 USB 调试并授权后，终端执行 adb devices，列表左侧即为设备编号（如 10AG561473007KL）。多台设备时逐行显示，执行前确认要用的那台。">?</span></label><input type="text" id="inUdid" placeholder="自动填充当前设备"></div>
-        <div class="field"><label>应用包名（appPackage）<span class="help-icon" data-help="获取途径：在手机上打开目标 App（停在它的界面），终端执行 adb shell dumpsys window | grep mCurrentFocus，输出里斜杠前那串就是包名（如 com.recordlife.kuaige）。也可用 adb shell pm list packages | grep 关键词 模糊查找。">?</span></label><input type="text" id="inPackage" placeholder="如 com.recordlife.kuaige"></div>
-        <div class="field"><label>启动 Activity<span class="help-icon" data-help="获取途径：手机停在目标 App 的首页，终端执行 adb shell dumpsys window | grep mCurrentFocus，斜杠后就是当前 Activity（完整类名，如 com.recordlife.kuaige/.feature.main.MainActivity 需补全包名前缀）。注意：被测 App 需已安装并有该启动页。">?</span></label><input type="text" id="inActivity" placeholder="如 com.recordlife.kuaige.feature.main.MainActivity"></div>
+        <div class="field"><label>设备编号（udid）<span class="help-icon" data-help="获取途径：手机开启 USB 调试并授权后，终端执行 adb devices，列表左侧即为设备编号（如 10AG561473007KL）。多台设备时逐行显示，执行前确认要用的那台。" data-cmd="adb devices">?</span></label><input type="text" id="inUdid" placeholder="自动填充当前设备"></div>
+        <div class="field"><label>应用包名（appPackage）<span class="help-icon" data-help="获取途径：在手机上打开目标 App（停在它的界面），终端执行 adb shell dumpsys window | grep mCurrentFocus，输出里斜杠前那串就是包名（如 com.recordlife.kuaige）。也可用备用命令模糊查找。" data-cmd="adb shell dumpsys window | grep mCurrentFocus\nadb shell pm list packages | grep <关键词>">?</span></label><input type="text" id="inPackage" placeholder="如 com.recordlife.kuaige"></div>
+        <div class="field"><label>启动 Activity<span class="help-icon" data-help="获取途径：手机停在目标 App 的首页，终端执行 adb shell dumpsys window | grep mCurrentFocus，斜杠后就是当前 Activity（完整类名，如 com.recordlife.kuaige/.feature.main.MainActivity 需补全包名前缀）。注意：被测 App 需已安装并有该启动页。" data-cmd="adb shell dumpsys window | grep mCurrentFocus">?</span></label><input type="text" id="inActivity" placeholder="如 com.recordlife.kuaige.feature.main.MainActivity"></div>
       </div>
       <p class="muted mt">以上参数仅对本次执行生效（不写回 conf 文件）；留空 = 用默认值。</p>
     </div>

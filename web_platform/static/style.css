@@ -370,7 +370,7 @@ html.day .st-PENDING { background: #a1a1aa; }
 .help-tip {
   position: fixed; z-index: 9999; max-width: 380px; padding: 9px 12px;
   font-size: 12.5px; line-height: 1.6; color: #111827;
-  background: rgba(255, 255, 255, 0.92);
+  background: rgba(255, 255, 255, 1);
   border: 1px solid #d1d5db; border-radius: 8px;
   box-shadow: 0 6px 20px rgba(0,0,0,.15);
   pointer-events: auto; user-select: text; cursor: default;
@@ -391,3 +391,171 @@ details.adv-info summary:hover { color: #111827; }
 details.adv-info .kv { display: flex; align-items: center; gap: 10px; padding: 6px 0; font-size: 12.5px; }
 details.adv-info .kv span { color: #6b7280; flex: 0 0 110px; }
 details.adv-info .kv code { flex: 1; word-break: break-all; color: #374151; }
+
+
+/* ═══════════════════════════════════════════════════════════════════
+   v2.0 视觉升级 · 设计令牌与组件精修（后置覆盖，遵循既有深色基调+sky品牌蓝）
+   原则：CSS 承载全部视觉改动，JS 逻辑零改动；日/夜主题经变量自动适配
+   ═══════════════════════════════════════════════════════════════════ */
+:root {
+  --radius-lg: 16px; --radius-md: 12px; --radius-sm: 8px;
+  --grad-accent: linear-gradient(135deg, #0ea5e9, #38bdf8);
+  --grad-accent-hover: linear-gradient(135deg, #38bdf8, #7dd3fc);
+  --stat-blue-bar: linear-gradient(90deg, #0ea5e9, #38bdf8);
+  --stat-green-bar: linear-gradient(90deg, #16a34a, #4ade80);
+  --stat-red-bar: linear-gradient(90deg, #e03131, #ff8787);
+  --stat-purple-bar: linear-gradient(90deg, #7048e8, #9775fa);
+}
+html.day {
+  --grad-accent: linear-gradient(135deg, #0284c7, #38bdf8);
+  --grad-accent-hover: linear-gradient(135deg, #38bdf8, #0ea5e9);
+}
+
+/* 页面背景：顶部微妙品牌光晕（大而柔，不影响可读性） */
+body {
+  background:
+    radial-gradient(1200px 420px at 18% -8%, rgba(56,189,248,.07), transparent 62%),
+    radial-gradient(900px 380px at 96% -6%, rgba(112,72,232,.05), transparent 60%),
+    var(--bg);
+}
+html.day body {
+  background:
+    radial-gradient(1200px 420px at 18% -8%, rgba(2,132,199,.06), transparent 62%),
+    radial-gradient(900px 380px at 96% -6%, rgba(112,72,232,.04), transparent 60%),
+    var(--bg);
+}
+
+/* ---------- 全局滚动条 ---------- */
+::-webkit-scrollbar { width: 9px; height: 9px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,.14); border-radius: 999px; border: 2px solid transparent; background-clip: content-box; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,.26); background-clip: content-box; }
+html.day ::-webkit-scrollbar-thumb { background: rgba(0,0,0,.18); background-clip: content-box; }
+html.day ::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,.32); background-clip: content-box; }
+
+/* ---------- 侧栏：品牌渐变 + 选中态渐变 ---------- */
+.sidebar .brand .logo { background: var(--grad-accent); color: #04263a; box-shadow: 0 4px 14px rgba(14,165,233,.35); }
+.sidebar nav a.on {
+  background: linear-gradient(135deg, rgba(14,165,233,.18), rgba(56,189,248,.08));
+  color: #fff; font-weight: 600;
+}
+.sidebar nav a.on::before { background: var(--grad-accent); width: 3px; }
+html.day .sidebar nav a.on { background: linear-gradient(135deg, rgba(2,132,199,.12), rgba(56,189,248,.06)); }
+
+/* ---------- 卡片：hover 微升起 ---------- */
+.card:hover { transform: translateY(-1px); box-shadow: var(--card-shadow-hover); }
+.card { transition: box-shadow .2s, transform .2s; }
+
+/* ---------- 统计卡重做：深色面板 + 顶部彩条 + 状态色数字（替代大红大绿大色块） ---------- */
+.stat, .stat.s-green, .stat.s-red, .stat.s-slate {
+  background: var(--panel2); color: var(--ink);
+  border: 1px solid var(--line-soft); border-radius: var(--radius-lg);
+  padding: 20px 22px;
+}
+.stat::before {
+  content: ""; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+  background: var(--stat-bar, var(--grad-accent));
+  border-radius: 3px 3px 0 0;
+}
+.stat .num { font-size: 32px; font-weight: 800; color: var(--stat-num, var(--ink)); animation: numIn .45s cubic-bezier(.2,.9,.3,1.1) both; }
+.stat .label { color: var(--muted); margin-top: 2px; }
+.stat .bgico { font-size: 46px; opacity: .09; right: 16px; top: 12px; }
+.stat.s-blue   { --stat-bar: var(--stat-blue-bar);  --stat-num: #7dd3fc; }
+.stat.s-green  { --stat-bar: var(--stat-green-bar); --stat-num: #4ade80; }
+.stat.s-red    { --stat-bar: var(--stat-red-bar);   --stat-num: #ff8787; }
+.stat.s-slate  { --stat-bar: var(--stat-purple-bar);--stat-num: #d0bfff; }
+.stat.clickable:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,.35); }
+@keyframes numIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+html.day .stat.s-blue .num   { color: #0369a1; }
+html.day .stat.s-green .num  { color: #15803d; }
+html.day .stat.s-red .num    { color: #b91c1c; }
+html.day .stat.s-slate .num  { color: #6d28d9; }
+html.day .stat .label { color: var(--muted); }
+html.day .stat { background: var(--panel2); }
+
+/* ---------- 按钮：主按钮品牌渐变，层级更清晰 ---------- */
+button, .btn {
+  background: var(--grad-accent, var(--primary)); color: #04263a;
+  box-shadow: 0 2px 10px rgba(14,165,233,.28);
+}
+button:hover, .btn:hover {
+  background: var(--grad-accent-hover, var(--primary2));
+  box-shadow: 0 4px 16px rgba(14,165,233,.38); transform: translateY(-1px);
+}
+button:disabled { background: #404040; box-shadow: none; color: #a3a3a3; }
+html.day button:disabled { background: #d4d4d8; color: #8e8e93; }
+button.danger { background: var(--bad); color: #fff; box-shadow: 0 2px 10px rgba(224,49,49,.28); }
+button.danger:hover { background: #f03e3e; box-shadow: 0 4px 16px rgba(224,49,49,.36); }
+
+/* 主 CTA（开始执行）：更大更醒目 */
+button.cta, #btnStart {
+  padding: 10px 26px; font-size: 14.5px; border-radius: 12px; font-weight: 700;
+  box-shadow: 0 4px 18px rgba(14,165,233,.35);
+}
+#btnStart:hover { box-shadow: 0 6px 24px rgba(14,165,233,.45); }
+
+/* ---------- 表格精修 ---------- */
+th { background: transparent; border-bottom: 1px solid var(--line); text-transform: none; }
+.tblwrap { background: color-mix(in srgb, var(--panel2) 55%, transparent); }
+tbody tr:hover { background: var(--accent-tint); }
+tbody tr { transition: background .12s; }
+td .ops button { margin-right: 0; }
+
+/* ---------- 用例树：hover 行 + 缩进 ---------- */
+.tree li { border-radius: 6px; }
+.tree li:hover { background: rgba(255,255,255,.04); }
+html.day .tree li:hover { background: rgba(0,0,0,.04); }
+
+/* ---------- 进度条：品牌渐变 + 流光 ---------- */
+.bar i { background: var(--grad-accent); position: relative; overflow: hidden; }
+.bar i::after {
+  content: ""; position: absolute; inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.35), transparent);
+  animation: shimmer 1.6s infinite;
+}
+@keyframes shimmer { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
+
+/* ---------- logbox：顶部渐隐 + 精致滚动 ---------- */
+.logbox { scrollbar-width: thin; }
+
+/* ---------- 代码审查页签：选中渐变 ---------- */
+.toptabs .ttab.on { background: var(--grad-accent); color: #04263a; font-weight: 700; border-color: transparent; }
+.tooltabs .ttab2.on { background: var(--grad-accent); color: #04263a; }
+
+/* ---------- 输入 focus 统一 ring ---------- */
+select:focus, input[type=text]:focus, textarea:focus {
+  border-color: var(--accent); box-shadow: 0 0 0 3.5px rgba(56,189,248,.16);
+}
+
+
+/* ---------------- 复选框：白色透明（替代原生黑块） ---------------- */
+input[type=checkbox] {
+  appearance: none; -webkit-appearance: none;
+  width: 16px; height: 16px; border-radius: 4px;
+  border: 1.5px solid rgba(255,255,255,.35); background: rgba(255,255,255,.08);
+  cursor: pointer; position: relative; transition: all .15s; flex: none; margin: 0;
+  vertical-align: -3px;
+}
+input[type=checkbox]:hover { border-color: rgba(255,255,255,.6); background: rgba(255,255,255,.14); }
+input[type=checkbox]:checked {
+  background: #ffffff; border-color: #111827;
+}
+input[type=checkbox]:checked::after {
+  content: ""; position: absolute; left: 4.5px; top: 1.5px;
+  width: 4px; height: 8px; border: solid #111827; border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+html.day input[type=checkbox] { border-color: rgba(0,0,0,.25); background: rgba(0,0,0,.04); }
+html.day input[type=checkbox]:hover { border-color: rgba(0,0,0,.45); background: rgba(0,0,0,.08); }
+
+/* ---------------- 报告列表：失败录屏缩略图 ---------------- */
+.attach-cell video.video-thumb {
+  height: 52px; width: auto; aspect-ratio: 16/9; object-fit: cover;
+  border-radius: 6px; border: 1px solid var(--line); cursor: zoom-in;
+  background: #000; transition: transform .15s, border-color .15s, box-shadow .15s;
+  display: block;
+}
+.attach-cell video.video-thumb:hover {
+  transform: scale(1.06); border-color: var(--accent);
+  box-shadow: 0 4px 14px rgba(0,0,0,.3);
+}

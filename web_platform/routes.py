@@ -257,6 +257,14 @@ def api_run_attachment(run_id, source):
     return send_file(p)
 
 
+@bp.route('/api/run/<run_id>/video_thumbs')
+def api_run_video_thumbs(run_id):
+    """该次执行的失败录屏缩略图（首帧）：[{video, thumb}]，供报告列表直接展示与播放。
+    缩略图由 ffmpeg 抽帧生成并缓存在 allure 数据目录内，走统一附件服务。"""
+    results_dir = runner.manager.cli_results_dir(run_id) or report_data.run_results_dir(run_id)
+    return jsonify({'ok': True, 'thumbs': report_data.ensure_video_thumbs(results_dir)})
+
+
 @bp.route('/api/run/<run_id>/stop', methods=['POST'])
 def api_stop_run(run_id):
     ok, msg = runner.manager.stop_run(run_id)
@@ -284,6 +292,14 @@ def api_appium_start():
         appium_bin = shutil.which('appium') or ''
     if not appium_bin or not os.path.isfile(appium_bin):
         return jsonify({'ok': False, 'msg': '未找到 appium 可执行文件（~/appium2）'}), 400
+    # 端口竞态防护：4726 被占用但 /status 不通 = 僵死残留进程，先清理再拉起
+    # （否则新进程 EADDRINUSE 直接退出，服务永远起不来）
+    stale = subprocess.run(['pgrep', '-f', 'appium --port 4726'],
+                           capture_output=True, text=True)
+    if stale.returncode == 0 and stale.stdout.strip():
+        subprocess.run(['pkill', '-f', 'appium --port 4726'],
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        time.sleep(1.5)
     log_dir = os.path.join(BASE_DIR, 'logs')
     os.makedirs(log_dir, exist_ok=True)
     log = open(os.path.join(log_dir, 'appium.log'), 'ab')
@@ -303,13 +319,9 @@ def api_appium_start():
         return jsonify({'ok': False, 'msg': 'Appium 启动失败: %s' % e}), 500
     finally:
         log.close()
-    deadline = time.time() + 20
-    while time.time() < deadline:
-        ok, _ = check_appium('127.0.0.1', '4726')
-        if ok:
-            return jsonify({'ok': True, 'msg': 'Appium 已启动'})
-        time.sleep(0.5)
-    return jsonify({'ok': False, 'msg': 'Appium 启动超时，请查看 logs/appium.log'}), 500
+    # 异步模式：立即返回，由前端轮询 /api/status 等就绪（冷启动可能超过 20s，
+    # 同步阻塞会让前端请求超时且无法感知"其实正在启动"）
+    return jsonify({'ok': True, 'msg': 'Appium 启动中…'})
 
 
 @bp.route('/api/run/<run_id>/report/open', methods=['POST'])

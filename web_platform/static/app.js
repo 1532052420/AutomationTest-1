@@ -17,6 +17,12 @@ function esc(s) {
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
+/* 失败录屏缩略图：点击放大播放（全局委托） */
+document.addEventListener('click', (e) => {
+  const v = e.target.closest('video.video-thumb');
+  if (v && v.dataset.video) { e.preventDefault(); openLightbox(v.dataset.video + '#t=1.5', '录屏'); }
+});
+
 /* 状态徽章：run 状态为大写（PASSED…），用例/步骤状态来自 allure 为小写（passed…），
    统一转大写复用同一套 .st-* 样式；broken→ERROR、skipped/unknown→PENDING */
 function statusBadge(st) {
@@ -304,7 +310,7 @@ function bindParamHelp() {
     tip.addEventListener('click', async (e) => {
       const btn = e.target.closest('.tip-copy');
       if (!btn) return;
-      const text = (tip.getAttribute('data-text') || '');
+      const text = (tip.getAttribute('data-cmd') || tip.getAttribute('data-text') || '');
       try { await navigator.clipboard.writeText(text); }
       catch (err) {
         const ta = document.createElement('textarea');
@@ -341,12 +347,35 @@ function bindParamHelp() {
   });
 }
 
+/* 启动 Appium：后端立即拉起并返回（异步），前端轮询状态直到就绪（上限 45s）。
+   冷启动可能超过 20s，同步等待会让请求超时且状态不明确 */
 async function startAppium() {
   const btn = $('#btnAppium');
   btn.disabled = true; btn.textContent = '⏳ 启动中…';
   const d = await postJson('/api/appium/start', {});
-  toast(d.msg || (d.ok ? 'Appium 已启动' : '启动失败'), d.ok);
-  refreshAppiumBadge();
+  if (!d.ok) {
+    btn.disabled = false; btn.textContent = '🟢 启动 Appium';
+    toast(d.msg || '启动失败', false);
+    return;
+  }
+  toast(d.already ? 'Appium 已在运行' : 'Appium 启动中，请稍候…', true);
+  const deadline = Date.now() + 45000;
+  const poll = async () => {
+    const s = await api('/api/status');
+    if (s.appium && s.appium.ok) {
+      toast('Appium 已就绪');
+      refreshAppiumBadge();
+      return;
+    }
+    if (Date.now() > deadline) {
+      toast('Appium 启动超时（45s），请查看 logs/appium.log', false);
+      refreshAppiumBadge();
+      return;
+    }
+    btn.textContent = '⏳ 启动中… ' + Math.ceil((deadline - Date.now()) / 1000) + 's';
+    setTimeout(poll, 1000);
+  };
+  poll();
 }
 
 async function initRun() {
@@ -686,9 +715,12 @@ async function showRunDetail(runId) {
 function openLightbox(src, name) {
   let lb = $('#lightbox');
   if (!lb) { lb = document.createElement('div'); lb.id = 'lightbox'; document.body.appendChild(lb); }
-  lb.innerHTML = '<img src="' + src + '" alt=""><button class="lb-close">✕</button>';
+  const isVideo = /\.(mp4|webm|mov)(\?|#|$)/.test(src) || src.includes('#t=');
+  lb.innerHTML = (isVideo
+    ? '<video src="' + src + '" controls autoplay style="max-width:90vw;max-height:86vh;border-radius:8px;box-shadow:0 20px 60px rgba(0,0,0,.5)"></video>'
+    : '<img src="' + src + '" alt="">') + '<button class="lb-close">✕</button>';
   lb.classList.add('show');
-  lb.onclick = () => lb.classList.remove('show');
+  lb.onclick = (e) => { if (e.target === lb || e.target.closest('.lb-close')) lb.classList.remove('show'); };
 }
 
 /* ---------------- 测试报告页 ---------------- */
@@ -714,24 +746,34 @@ async function loadReportList() {
   if (_reportPage < 1) _reportPage = 1;
   const slice = runs.slice((_reportPage - 1) * PAGE_SIZE, _reportPage * PAGE_SIZE);
   tb.innerHTML = slice.map(r => {
-    const ev = r.evidence || null;
-    const evTxt = ev && (ev.shots || ev.videos)
-      ? (ev.shots ? '📸 ' + ev.shots + ' 图' : '') + (ev.shots && ev.videos ? ' · ' : '') + (ev.videos ? '🎬 ' + ev.videos + ' 视频' : '')
-      : '—';
     return '<tr>' +
     '<td><a class="runlink" href="/runs/' + esc(r.run_id) + '" title="原始编号: ' + esc(r.run_id) + '">' + esc(formatRunId(r.run_id)) + '</a></td>' +
     '<td>' + fmtTime(r.start_time) + '</td>' +
     '<td>' + statusBadge(r.status) + '</td>' +
-    '<td>' + (ev && (ev.shots || ev.videos)
-      ? '<a class="runlink" href="/runs/' + esc(r.run_id) + '">' + esc(evTxt) + '</a>'
-      : '<span class="muted">—</span>') + '</td>' +
+    '<td class="attach-cell" data-run="' + esc(r.run_id) + '"><span class="muted">…</span></td>' +
     '<td><button class="ghost mini" onclick="openReportFor(\'' + esc(r.run_id) + '\', this)">打开报告</button></td>' +
     '<td><div class="ops">' +
     '<button class="ghost mini" onclick="showRunDetail(\'' + esc(r.run_id) + '\')">详情</button>' +
     '<button class="mini danger-ghost" onclick="deleteRunFor(\'' + esc(r.run_id) + '\')">删除数据</button>' +
     '</div></td></tr>';
   }).join('');
+  // 附件列异步填充：失败录屏首帧缩略图（点击放大播放）；无视频显示 —
+  slice.forEach(r => loadVideoThumbs(r.run_id));
   renderPager('#reportPager', _reportPage, pages, (p) => { _reportPage = p; loadReportList(); }, runs.length);
+}
+
+/* 附件列：拉取失败录屏首帧缩略图并填充；点击 lightbox 放大播放 */
+async function loadVideoThumbs(runId) {
+  const cell = document.querySelector('.attach-cell[data-run="' + CSS.escape(runId) + '"]');
+  if (!cell) return;
+  const d = await api('/api/run/' + encodeURIComponent(runId) + '/video_thumbs');
+  if (!cell.isConnected) return;
+  const thumbs = (d && d.thumbs) || [];
+  if (!thumbs.length) { cell.innerHTML = '<span class="muted">—</span>'; return; }
+  cell.innerHTML = thumbs.map(t =>
+    '<video class="video-thumb" src="/api/runs/' + encodeURIComponent(runId) + '/res/' + encodeURIComponent(t.video) + '#t=1.5" ' +
+    'preload="metadata" data-video="/api/runs/' + encodeURIComponent(runId) + '/res/' + encodeURIComponent(t.video) + '" title="点击放大播放失败录屏"></video>'
+  ).join('');
 }
 
 /* 打开报告（统一入口）：按钮 loading + 5 秒冷却防重复点击。

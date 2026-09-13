@@ -130,6 +130,60 @@ def run_stats(results_dir):
     return stats
 
 
+def list_videos(results_dir):
+    """枚举该目录内全部失败录屏视频附件：[{source}]（source 为纯文件名，走附件服务）。"""
+    if not results_dir or not os.path.isdir(results_dir):
+        return []
+    out = []
+    for fp in sorted(glob.glob(os.path.join(results_dir, '*-result.json'))):
+        try:
+            with open(fp, encoding='utf-8') as f:
+                d = json.load(f)
+        except Exception:
+            continue
+
+        def collect(ats):
+            for a in ats or []:
+                if (a.get('type') or '') == 'video/mp4' and (a.get('source') or ''):
+                    src_name = a['source']
+                    if src_name not in [x['source'] for x in out] and os.path.isfile(os.path.join(results_dir, src_name)):
+                        out.append({'source': src_name})
+
+        def walk(steps):
+            for s in steps or []:
+                collect(s.get('attachments'))
+                walk(s.get('steps'))
+
+        walk(d.get('steps') or [])
+        collect(d.get('attachments'))
+    return out
+
+
+def ensure_video_thumbs(results_dir):
+    """为每个失败录屏生成首帧缩略图（ffmpeg 抽帧，缓存复用）：
+    返回 [{video: 视频附件名, thumb: 缩略图附件名}]，缩略图存放在同目录内
+    （thumb_<原文件名>.jpg），复用附件服务，无路径穿越风险。"""
+    import subprocess
+    if not results_dir or not os.path.isdir(results_dir):
+        return []
+    thumbs = []
+    for v in list_videos(results_dir):
+        src_name = v['source']
+        base = src_name.rsplit('.', 1)[0]
+        thumb_name = 'thumb_%s.jpg' % base
+        thumb_path = os.path.join(results_dir, thumb_name)
+        if not os.path.isfile(thumb_path):
+            try:
+                subprocess.run(['ffmpeg', '-y', '-ss', '0', '-i', os.path.join(results_dir, src_name),
+                                '-frames:v', '1', '-q:v', '5', thumb_path],
+                               capture_output=True, timeout=30)
+            except Exception:
+                pass
+        if os.path.isfile(thumb_path):
+            thumbs.append({'video': src_name, 'thumb': thumb_name})
+    return thumbs
+
+
 def resolve_attachment_path(run_id, source, results_dir=None):
     """附件文件绝对路径；严格限制为 allure-results 目录内的纯文件名，防路径穿越。
     results_dir：命令行执行导入任务的 allure-results 目录（为空走平台 runs 目录）。"""

@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="dark">
+<script>try { if (localStorage.getItem('platform_theme') === 'day') document.documentElement.classList.add('day'); } catch (e) {}</script>
+<title>元素定位器 · AppUI 自动化测试平台</title>
+<link rel="stylesheet" href="/static/style.css">
+<style>
+  /* 内嵌定位器：无页头，内容区直接占满（页面头会压缩下方可用高度，已按验收意见移除；
+     「新窗口打开」入口由定位器自身工具条提供，见 element_locator/static/index.js setupEmbedBar） */
+  main.locator-page { display: flex; flex-direction: column; }
+  #locWrap { position: relative; flex: 1; min-height: 480px; overflow: hidden;
+    background: #101012; }
+  #locFrame { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; display: none; background: #101012; }
+  #locPlaceholder { position: absolute; inset: 0; display: flex; flex-direction: column; gap: 10px;
+    align-items: center; justify-content: center; color: #9ca3af; font-size: 14px; text-align: center; }
+  #locPlaceholder .spin { font-size: 26px; animation: locpulse 1.2s ease-in-out infinite; }
+  @keyframes locpulse { 0%,100% { opacity: .35 } 50% { opacity: 1 } }
+  html.day #locWrap { background: #f3f4f6; }
+  html.day #locFrame { background: #fff; }
+  html.day #locPlaceholder { color: #6b7280; }
+</style>
+</head>
+<body data-page="locator">
+<div class="sidebar" id="sidebar"></div>
+<main class="locator-page">
+  <div id="locWrap">
+    <iframe id="locFrame" title="元素定位器"></iframe>
+    <div id="locPlaceholder"><div class="spin">⏳</div><div>正在启动元素定位器服务…</div></div>
+  </div>
+</main>
+<div id="toast"></div>
+<script src="/static/theme.js"></script>
+<script src="/static/app.js"></script>
+<script>
+renderSidebar('/locator');
+(function () {
+  const frame = document.getElementById('locFrame');
+  const ph = document.getElementById('locPlaceholder');
+  (async () => {
+    try {
+      const d = await postJson('/api/locator/start', {});
+      if (d.ok) {
+        frame.onload = () => { frame.style.display = 'block'; ph.style.display = 'none'; };
+        frame.src = d.url;
+        // 兜底：iframe 的 load 在极快完成时可能早于监听挂载，4 秒后强制显示
+        setTimeout(() => {
+          if (frame.style.display !== 'block') { frame.style.display = 'block'; ph.style.display = 'none'; }
+        }, 4000);
+      } else {
+        ph.innerHTML = '❌ 元素定位器启动失败：' + (d.msg || '未知原因')
+          + '<br><small>可稍后刷新本页重试</small>';
+      }
+    } catch (err) {
+      ph.textContent = '❌ 启动请求异常：' + err;
+    }
+  })();
+})();
+</script>
+</body>
+</html>

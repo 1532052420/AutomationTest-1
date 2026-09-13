@@ -12,6 +12,7 @@ import urllib.request
 from flask import Blueprint, jsonify, redirect, render_template, request, send_file
 
 from web_platform import report_data
+from generate_app_ui_test_report import inject_attachment_thumbnail_patch
 from web_platform import runner
 from web_platform.runtime_config import (
     BASE_DIR,
@@ -120,7 +121,9 @@ def page_report():
 
 @bp.route('/locator')
 def page_locator():
-    return redirect('http://127.0.0.1:8001/')
+    # 内嵌页：平台壳不销毁、iframe 加载定位器，替代 302 跨域整页跳转
+    # （跨域跳转时浏览器「旧页销毁→新页首帧」的空档会铺一帧白画布，夜间模式下很刺眼）
+    return render_template('locator.html')
 
 
 # ---------------------------------------------------------------- API

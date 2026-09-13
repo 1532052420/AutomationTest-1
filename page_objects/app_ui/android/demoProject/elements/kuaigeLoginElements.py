@@ -12,7 +12,7 @@ class KuaigeLoginElements:
     def __init__(self):
         # ---- 登录方式选择层（点击主页任意位置后弹出）----
         # 手机号登录入口（FrameLayout，含"手机登录"文案）
-        self.btn_phone_login = CreateElement.create(Locator_Type.ID, 'com.recordlife.kuaige:id/btnPhone', wait_type=Wait_By.VISIBILITY_OF)
+        self.btn_phone_login = CreateElement.create(Locator_Type.ID, 'com.recordlife.kuaige:id/btnPhone', wait_type=Wait_By.VISIBILITY_OF, desc='手机号登录入口')
 
         # ---- 首次启动一次性弹窗（teardown reset_app 会 pm clear 清数据，每次首启都会遇到）----
         # 隐私协议弹窗「同意并继续」按钮
@@ -27,13 +27,13 @@ class KuaigeLoginElements:
 
         # ---- 手机号登录表单页 ----
         # 手机号输入框（hint：请输入手机号）
-        self.et_phone = CreateElement.create(Locator_Type.ID, 'com.recordlife.kuaige:id/etPhone', wait_type=Wait_By.VISIBILITY_OF)
+        self.et_phone = CreateElement.create(Locator_Type.ID, 'com.recordlife.kuaige:id/etPhone', wait_type=Wait_By.VISIBILITY_OF, desc='手机号输入框')
         # 验证码输入框（hint：请输入验证码）
-        self.et_code = CreateElement.create(Locator_Type.ID, 'com.recordlife.kuaige:id/etCode', wait_type=Wait_By.VISIBILITY_OF)
+        self.et_code = CreateElement.create(Locator_Type.ID, 'com.recordlife.kuaige:id/etCode', wait_type=Wait_By.VISIBILITY_OF, desc='验证码输入框')
         # 立即登录按钮
-        self.btn_login = CreateElement.create(Locator_Type.ID, 'com.recordlife.kuaige:id/btnLogin', wait_type=Wait_By.VISIBILITY_OF)
+        self.btn_login = CreateElement.create(Locator_Type.ID, 'com.recordlife.kuaige:id/btnLogin', wait_type=Wait_By.VISIBILITY_OF, desc='立即登录按钮')
         # 我已阅读并同意 - 左侧勾选框 icon（点击切换勾选）。
         # 注意：不要点整行 TextView（可点但会误触《用户协议》链接跳到协议页），用 ivCheck 精确定位
-        self.agree_protocol = CreateElement.create(Locator_Type.ID, 'com.recordlife.kuaige:id/ivCheck', wait_type=Wait_By.VISIBILITY_OF)
+        self.agree_protocol = CreateElement.create(Locator_Type.ID, 'com.recordlife.kuaige:id/ivCheck', wait_type=Wait_By.VISIBILITY_OF, desc='协议勾选框')
         # 登录成功字段/文案（含 toast 与页面文本，contains 兼容两种）
-        self.text_login_success = CreateElement.create(Locator_Type.XPATH, '//*[contains(@text,"登录成功")]', wait_type=Wait_By.PRESENCE_OF_ELEMENT_LOCATED)
+        self.text_login_success = CreateElement.create(Locator_Type.XPATH, '//*[contains(@text,"登录成功")]', wait_type=Wait_By.PRESENCE_OF_ELEMENT_LOCATED, desc='登录成功提示')

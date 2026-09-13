@@ -26,9 +26,9 @@ APPUI_PATCH_STYLE = """
 <style>
 .attachment-row{flex-wrap:wrap;}
 .appui-thumb-holder{flex-basis:100%;width:100%;padding:2px 12px 8px 40px;box-sizing:border-box;}
-.appui-thumb{display:block;max-width:200px;max-height:120px;width:auto;height:auto;border-radius:8px;
+.appui-thumb{display:block;max-width:100px;max-height:60px;width:auto;height:auto;border-radius:6px;
   border:1px solid rgba(127,127,127,.45);cursor:zoom-in;object-fit:cover;background:rgba(127,127,127,.12);}
-.appui-thumb--video{width:200px;height:112px;background:#000;}
+.appui-thumb--video{width:100px;height:56px;background:#000;}
 .modal__window{max-height:calc(100vh - 48px) !important;overflow:auto !important;}
 .modal__content{overflow:auto !important;}
 .modal__window .attachment-preview__media{max-width:100% !important;max-height:calc(100vh - 160px) !important;

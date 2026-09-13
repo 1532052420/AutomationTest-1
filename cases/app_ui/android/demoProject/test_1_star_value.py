@@ -8,10 +8,13 @@
 # 5. 点击左上角返回箭头
 # 6. 断言关闭详情页回跳上一级页面（个人主页）
 import time
+import allure
 from base.app_ui.android.demoProject.app_ui_android_demoProject_client import APP_UI_Android_demoProject_Client
 from page_objects.app_ui.android.demoProject.pages.starValuePage import StarValuePage
 
 
+@allure.parent_suite('快歌APP自动化')
+@allure.suite('星光值交互')
 class Test1StarValue:
 
     def setup_class(self):
@@ -22,6 +25,7 @@ class Test1StarValue:
         time.sleep(3)
         self.page = StarValuePage(self.appOperator)
 
+    @allure.title('星光值·点击返回箭头回跳上一级页面')
     def test_back_to_previous_page(self):
         page = self.page
 
@@ -43,6 +47,7 @@ class Test1StarValue:
         # 6. 断言关闭详情页回跳上一级页面（个人主页）
         page.assert_profile_nickname()
 
+    @allure.title('星光值·点击礼物墙卡片无响应验证')
     def test_gift_card_no_response(self):
         page = self.page
 
@@ -61,6 +66,7 @@ class Test1StarValue:
         # 5. 点击礼物墙任意礼物卡片，断言不跳转、不弹窗、无响应
         page.assert_gift_card_click_no_response()
 
+    @allure.title('星光值·页面上滑浏览礼物卡片')
     def test_swipe_up_browse_gifts(self):
         page = self.page
 
@@ -79,6 +85,7 @@ class Test1StarValue:
         # 5. 断言页面正常纵向滚动且可浏览礼物卡片
         page.assert_browse_after_swipe()
 
+    @allure.title('星光值·页面向上滚动至礼物墙底部')
     def test_swipe_up_to_bottom(self):
         page = self.page
 
@@ -94,6 +101,7 @@ class Test1StarValue:
         # 4. 上滑滚动至礼物墙底部，断言到底后不可再滑动
         page.swipe_to_bottom_and_assert()
 
+    @allure.title('星光值·页面向下滚动至礼物墙顶部')
     def test_swipe_down_to_top(self):
         page = self.page
 

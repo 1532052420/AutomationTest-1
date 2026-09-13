@@ -385,12 +385,15 @@ html.day .st-PENDING { background: #a1a1aa; }
 
 
 /* ---------------- 详情页高级信息（原始数据路径） ---------------- */
-details.adv-info { margin-top: 14px; border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; }
-details.adv-info summary { cursor: pointer; font-size: 12.5px; color: #6b7280; user-select: none; }
-details.adv-info summary:hover { color: #111827; }
+details.adv-info {
+  margin-top: 14px; border: 1px solid var(--line-soft); border-radius: 8px; padding: 8px 12px;
+  background: var(--dark);   /* 深色底 + 白色字体：与日志盒一致的代码风格，日夜主题下都清晰 */
+}
+details.adv-info summary { cursor: pointer; font-size: 12.5px; color: #9ca3af; user-select: none; }
+details.adv-info summary:hover { color: #ffffff; }
 details.adv-info .kv { display: flex; align-items: center; gap: 10px; padding: 6px 0; font-size: 12.5px; }
-details.adv-info .kv span { color: #6b7280; flex: 0 0 110px; }
-details.adv-info .kv code { flex: 1; word-break: break-all; color: #374151; }
+details.adv-info .kv span { color: #ffffff; flex: 0 0 110px; }
+details.adv-info .kv code { flex: 1; word-break: break-all; color: #ffffff; }
 
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -559,3 +562,6 @@ html.day input[type=checkbox]:hover { border-color: rgba(0,0,0,.45); background:
   transform: scale(1.06); border-color: var(--accent);
   box-shadow: 0 4px 14px rgba(0,0,0,.3);
 }
+
+/* 主题色画布：平台默认夜间（meta color-scheme=dark 管加载期画布），日间模式控件覆回浅色 */
+html.day { color-scheme: light; }

@@ -18,18 +18,23 @@ var tutExpandAll = false;
 
 const $ = (id) => document.getElementById(id);
 
-/* 步骤类型（与后端 case_generator.STEP_TYPES 一致）：值 -> 中文名 + 是否需要元素 + 是否需要参数 */
+/* 步骤类型（与后端 case_generator.STEP_TYPES 一致）：值 -> 中文名 + 是否需要元素 + 是否需要参数
+   group 用于下拉分组（基本操作 / 断言 / 长流程·等待与分支），defv = 切到该类型时参数框自动填的默认值 */
 const STEP_TYPES = [
-  { v: 'click', n: '点击', el: true, param: false, ph: '' },
-  { v: 'input', n: '输入', el: true, param: true, ph: '输入内容' },
-  { v: 'long_press', n: '长按', el: true, param: false, ph: '' },
-  { v: 'assert_visible', n: '断言存在', el: true, param: false, ph: '' },
-  { v: 'assert_text', n: '断言文本', el: true, param: true, ph: '期望文本' },
-  { v: 'assert_toast', n: '断言Toast', el: false, param: true, ph: 'toast文本' },
-  { v: 'screenshot', n: '截图', el: false, param: true, ph: '截图名' },
-  { v: 'tap', n: '坐标点击', el: false, param: true, ph: 'x,y' },
-  { v: 'sleep', n: '等待', el: false, param: true, ph: '秒数' },
-  { v: 'custom', n: '自定义代码', el: false, param: true, ph: '代码行' },
+  { v: 'click', n: '点击', el: true, param: false, ph: '', group: '基本操作', defv: '' },
+  { v: 'input', n: '输入', el: true, param: true, ph: '输入内容', group: '基本操作', defv: '' },
+  { v: 'long_press', n: '长按', el: true, param: false, ph: '', group: '基本操作', defv: '' },
+  { v: 'tap', n: '坐标点击', el: false, param: true, ph: 'x,y', group: '基本操作', defv: '' },
+  { v: 'screenshot', n: '截图', el: false, param: true, ph: '截图名', group: '基本操作', defv: '' },
+  { v: 'sleep', n: '固定等待(秒)', el: false, param: true, ph: '秒数', group: '基本操作', defv: '2' },
+  { v: 'assert_visible', n: '断言存在', el: true, param: false, ph: '', group: '断言' },
+  { v: 'assert_text', n: '断言文本', el: true, param: true, ph: '期望文本', group: '断言', defv: '' },
+  { v: 'assert_toast', n: '断言Toast', el: false, param: true, ph: 'toast文本', group: '断言', defv: '' },
+  { v: 'assert_gone', n: '断言消失(弹窗已关闭)', el: true, param: false, ph: '', group: '断言' },
+  { v: 'wait_element', n: '轮询等待出现(慢页面/生成中)', el: true, param: true, ph: '最长等待秒数', group: '长流程·等待与分支', defv: '60' },
+  { v: 'if_click', n: '出现才点击(分支弹窗)', el: true, param: true, ph: '探测秒数', group: '长流程·等待与分支', defv: '3' },
+  { v: 'hide_keyboard', n: '收起键盘', el: false, param: false, ph: '', group: '长流程·等待与分支' },
+  { v: 'custom', n: '自定义代码', el: false, param: true, ph: '代码行', group: '长流程·等待与分支', defv: '' },
 ];
 const stepTypeInfo = (v) => STEP_TYPES.find(t => t.v === v) || STEP_TYPES[0];
 
@@ -44,9 +49,13 @@ function genStepDesc(s) {
     case 'assert_visible': return '断言' + s.element + '出现';
     case 'assert_text': return '断言' + s.element + '文本为「' + p + '」';
     case 'assert_toast': return '断言toast「' + p + '」';
+    case 'wait_element': return '等待【' + s.element + '】出现（最长' + (p || 60) + '秒）';
+    case 'assert_gone': return '断言【' + s.element + '】已消失';
+    case 'if_click': return '若【' + s.element + '】出现则点击（最长等' + (p || 3) + '秒）';
     case 'screenshot': return '截图：' + p;
     case 'tap': return '点击坐标(' + p + ')';
     case 'sleep': return '等待' + p + '秒';
+    case 'hide_keyboard': return '收起键盘';
     case 'custom': return (p || '自定义代码').split('\n')[0];
     default: return '未定义步骤';
   }
@@ -76,7 +85,35 @@ function fallbackCopy(text, done) {
 }
 
 /* ---------- 初始化 ---------- */
+/* 内嵌模式（平台 iframe）：自带侧栏已被 CSS 隐藏，把侧栏里的功能件搬进顶部工具条，
+   避免「平台侧栏 + 定位器侧栏」双栏；独立访问 8001 时保持原布局不动 */
+function setupEmbedBar() {
+  if (!document.documentElement.classList.contains('embedded')) return;
+  const bar = $('embed-bar');
+  const rf = $('btn-refresh');
+  if (rf) bar.appendChild(rf);
+  // 新窗口打开：脱离平台内嵌、独立标签页使用定位器（原平台页头的入口挪到这里，紧跟刷新避免换行）
+  const nb = document.createElement('a');
+  nb.className = 'btn small';
+  nb.textContent = '↗ 新窗口';
+  nb.href = location.href;
+  nb.target = '_blank';
+  nb.rel = 'noopener';
+  bar.appendChild(nb);
+  const lab = document.createElement('span');
+  lab.className = 'bar-label';
+  lab.textContent = '📂 快速打开';
+  bar.appendChild(lab);
+  ['open-case-sel', 'open-ele-sel', 'open-page-sel'].forEach(id => {
+    const el = $(id);
+    if (el) { el.style.maxWidth = '160px'; bar.appendChild(el); }
+  });
+  const dv = $('dev-info');
+  if (dv) bar.appendChild(dv);
+}
+
 async function init() {
+  setupEmbedBar();
   const st = await fetch('/api/status').then(r => r.json()).catch(() => null);
   const devInfo = $('dev-info');
   // 版本号以服务端为准（页面缓存旧版本时也能纠正显示）
@@ -120,11 +157,12 @@ async function init() {
   $('btn-dup-cancel').addEventListener('click', () => { const r = dupResolver; closeDupPanel(); if (r) r('cancel'); });
   document.querySelectorAll('input[name="el-purpose"]').forEach(r => r.addEventListener('change', onPurposeChange));
   $('el-op-type').addEventListener('change', onOpTypeChange);
-  $('el-op-param').addEventListener('input', updatePreview);
+  $('el-op-param').addEventListener('input', () => { paramAuto = false; updatePreview(); });
   $('el-case-file').addEventListener('change', onCaseFileChange);
   $('el-case-method').addEventListener('change', updatePreview);
   // 三栏字段变动 → 三个示例代码区实时刷新
-  ['el-name', 'el-value', 'el-comment', 'el-case-comment', 'el-op-comment'].forEach(id => $(id).addEventListener('input', updatePreview));
+  ['el-name', 'el-value', 'el-comment', 'el-case-comment'].forEach(id => $(id).addEventListener('input', updatePreview));
+  $('el-op-comment').addEventListener('input', () => { opCommentAuto = false; updatePreview(); });
   ['el-type', 'el-wait'].forEach(id => $(id).addEventListener('change', updatePreview));
   $('el-wait-sec').addEventListener('input', updatePreview);
   $('el-insert-pos').addEventListener('change', () => { renderStepsList(currentSteps()); updatePreview(); });
@@ -136,6 +174,73 @@ async function init() {
   $('btn-view-close').addEventListener('click', () => { $('view-mask').style.display = 'none'; });
   $('btn-view-save').addEventListener('click', onSaveHdrFile);
   bindHelpIcons();
+  bindColumnResizers();
+}
+
+/* ---------- 三栏拖拽调宽：手柄在左/中栏之后，拖动时相邻两栏宽度此消彼长，
+   栏内内容（截图/树/教学）按栏宽等比跟随；宽度记忆在 localStorage ---------- */
+function bindColumnResizers() {
+  const left = document.querySelector('.col.left');
+  const mid = document.querySelector('.col.middle');
+  const right = document.querySelector('.col.right');
+  if (!left || !mid || !right) return;
+  const contentWidth = () => {
+    const m = document.querySelector('main');
+    return m.getBoundingClientRect().width - 24;   // 减去 main 左右 padding
+  };
+  // 恢复上次拖拽的宽度（仅宽屏生效；窄屏纵向堆叠忽略）
+  try {
+    const saved = JSON.parse(localStorage.getItem('locator_col_widths') || 'null');
+    if (saved && window.matchMedia('(min-width: 921px)').matches) {
+      const cw = contentWidth();
+      if (cw > 600 && saved.leftFrac && saved.midFrac) {
+        left.style.flex = '0 1 ' + Math.round(cw * saved.leftFrac) + 'px';
+        mid.style.flex = '0 1 ' + Math.round(cw * saved.midFrac) + 'px';
+      }
+    }
+  } catch (e) {}
+  document.querySelectorAll('.col-resizer').forEach(handle => {
+    handle.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      const which = handle.dataset.resize;             // left: 左↔中；middle: 中↔右
+      const mainRect = document.querySelector('main').getBoundingClientRect();
+      const cw = mainRect.width - 24;
+      handle.classList.add('dragging');
+      document.body.classList.add('col-resizing');
+      const onMove = (ev) => {
+        // 手柄位置 → 栏宽（px 基准）。拖左手柄时左/中栏同时定宽（中栏吸收差值），
+        // 拖中手柄时只动中栏（右栏 flex:1 吸收）；各栏 280px 下限，绝不撑出横向滚动。
+        const relX = ev.clientX - mainRect.left - 12;  // 减 main 左 padding
+        const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+        if (which === 'left') {
+          const avail = cw - 60 - 280;                 // 60=4个gap+2个手柄，280=右栏下限
+          const leftW = clamp(relX, 280, avail - 280);
+          left.style.flex = '0 1 ' + Math.round(leftW) + 'px';
+          mid.style.flex = '0 1 ' + Math.round(avail - leftW) + 'px';
+        } else {
+          const leftW = left.getBoundingClientRect().width;
+          const avail = cw - 60 - Math.round(leftW) - 280;
+          const midW = clamp(relX - leftW - 20, 280, Math.max(280, avail));
+          mid.style.flex = '0 1 ' + Math.round(midW) + 'px';
+        }
+        // 宽度按内容宽度比例记忆（窗口尺寸变化也能按比例恢复）
+        try {
+          localStorage.setItem('locator_col_widths', JSON.stringify({
+            leftFrac: left.getBoundingClientRect().width / cw,
+            midFrac: mid.getBoundingClientRect().width / cw,
+          }));
+        } catch (err) {}
+      };
+      const onUp = () => {
+        handle.classList.remove('dragging');
+        document.body.classList.remove('col-resizing');
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+      };
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+  });
 }
 
 /* ---------- 顶部快速打开：用例 / 元素定位 / 页面操作 文件编辑 ---------- */
@@ -564,11 +669,13 @@ async function openModal() {
   $('el-file').value = state.defaultEleFile || 'locator_gui_elements.py';
   // 用途默认：已有可追加的用例方法 → 直接选③（三件套一次完成），否则退回①
   document.querySelector('input[name="el-purpose"][value="only"]').checked = true;
-  $('el-op-type').innerHTML = STEP_TYPES.map(t => '<option value="' + t.v + '">' + t.n + '</option>').join('');
+  $('el-op-type').innerHTML = opTypeOptions();
   $('el-op-type').value = 'click';
   $('el-op-param').value = '';
+  paramAuto = true;  // 打开弹窗重置为「自动预填」状态
   // 步骤描述自动预填：优先元素文本（报告更友好），无文本则留空由后端按元素名生成
-  $('el-op-comment').value = (node.text && node.text.trim()) ? '点击「' + node.text.trim() + '」' : '';
+  $('el-op-comment').value = autoStepComment('click', node.text);  // 默认按「点击」生成；切类型时自动跟随
+  opCommentAuto = true;
   $('el-comment').value = '';
   $('el-case-comment').value = '';
   $('el-page-file').value = '';
@@ -666,18 +773,83 @@ function onPurposeChange() {
   const p = purposeValue();
   $('col-case').classList.toggle('dim', p === 'only');
   $('col-op').classList.toggle('dim', p === 'only');
-  $('op-note').textContent = p === 'all'
-    ? '🔗 保存时将自动生成/更新页面操作方法（三件套一次完成）'
-    : (p === 'case' ? '⚠ 不会生成页面方法——目标页面须已存在同名方法，否则执行报错' : '');
   if (p !== 'only') { onOpTypeChange(); onCaseFileChange(); }
-  else { renderStepsList([]); }
+  else { renderStepsList([]); updateOpNote(); }
   updatePreview();
 }
-/* 操作类型切换：参数框按需显隐 + 刷新预览 */
+/* 操作下拉分组渲染（见名知意：基本操作 / 断言 / 长流程·等待与分支） */
+function opTypeOptions() {
+  const groups = [];
+  STEP_TYPES.forEach(t => {
+    if (!t.group) return;
+    let g = groups.find(x => x.name === t.group);
+    if (!g) { g = { name: t.group, items: [] }; groups.push(g); }
+    g.items.push(t);
+  });
+  return groups.map(g =>
+    '<optgroup label="' + esc(g.name) + '">' +
+    g.items.map(t => '<option value="' + t.v + '">' + esc(t.n) + '</option>').join('') +
+    '</optgroup>').join('');
+}
+
+/* 操作提示区：用途联动提示 + 当前类型提示，两段共存（换行分隔） */
+function updateOpNote() {
+  const p = purposeValue();
+  const t = stepTypeInfo($('el-op-type').value);
+  const purposeNote = p === 'all'
+    ? '🔗 保存时将自动生成/更新页面操作方法（三件套一次完成）'
+    : (p === 'case' ? '⚠ 不会生成页面方法——目标页面须已存在同名方法，否则执行报错' : '');
+  const notes = {
+    wait_element: '⏱ 适合「生成中/加载慢」的页面：一直等它出现，最长 N 秒；超时用例失败。和「固定等待」不同——元素一出现立刻继续，不干等。',
+    assert_gone: '✅ 反向断言：元素必须「找不到」才算通过（验证弹窗已关闭、页面已跳走）。元素还在 = 用例失败并截图。',
+    if_click: '🔀 分支处理：弹窗/提示出现了就点它，没出现就跳过继续（最多探测 N 秒）。适合「今日首次发布」这类偶发弹窗，不会因没弹而卡死用例。',
+    hide_keyboard: '⌨ 输入完收起键盘再点下一步按钮（防止键盘遮挡）。无需选元素，直接保存即可。',
+    sleep: '⏳ 固定睡 N 秒再继续（尽量少用，优先用「轮询等待出现」）。',
+  };
+  const typeNote = notes[t.v] || '';
+  const note = $('op-note');
+  note.style.whiteSpace = 'pre-line';
+  note.textContent = [purposeNote, typeNote].filter(Boolean).join('\n');
+}
+
+/* 操作类型切换：参数框按需显隐 + 默认值联动 + 无需元素时元素栏弱化 + 刷新提示与预览
+   paramAuto/opCommentAuto：当前值是否为自动预填（用户手输后置 false，不再被覆盖） */
+var paramAuto = true;
+var opCommentAuto = true;
+
+function autoStepComment(type, elementText) {
+  /* 按类型自动生成步骤描述（用元素文本更友好，无文本回退元素名） */
+  const t = (elementText || '').trim();
+  switch (type) {
+    case 'click': return t ? '点击「' + t + '」' : '';
+    case 'input': return t ? '在「' + t + '」输入' : '';
+    case 'long_press': return t ? '长按「' + t + '」' : '';
+    case 'wait_element': return t ? '等待「' + t + '」出现' : '';
+    case 'assert_gone': return t ? '断言「' + t + '」已消失' : '';
+    case 'if_click': return t ? '若「' + t + '」出现则点击' : '';
+    case 'assert_visible': return t ? '断言「' + t + '」出现' : '';
+    default: return '';
+  }
+}
+
 function onOpTypeChange() {
   const t = stepTypeInfo($('el-op-type').value);
   $('el-op-param-wrap').style.display = t.param ? '' : 'none';
   $('el-op-param').placeholder = t.ph || '参数';
+  // 换类型时：参数为空或是上个类型的自动预填值 → 换成当前类型默认值（用户手输过则保留）
+  if (t.param && (paramAuto || !$('el-op-param').value.trim())) {
+    if (t.defv !== undefined) $('el-op-param').value = t.defv;
+    paramAuto = true;
+  }
+  // 步骤描述是自动预填时跟随类型重生成（避免「等待」步骤还挂着「点击…」描述）
+  if (opCommentAuto) {
+    $('el-op-comment').value = autoStepComment(t.v, $('el-name').value);
+  }
+  // 无需元素的类型（收键盘/Toast/坐标/截图/固定等待/自定义）：元素栏弱化示意「这步不依赖元素」
+  // （元素本身仍会照常入库——从截图选进来的元素攒在库里，后续步骤可用）
+  $('col-element').classList.toggle('soft', t.el === false);
+  $('col-element').classList.toggle('dim', false);
+  updateOpNote();
   updatePreview();
 }
 /* ---- 代码预览：与后端 case_step_line 保持一致（所见即所得） ---- */
@@ -691,6 +863,16 @@ function previewLine(step) {
     case 'assert_visible': return 'page.assert_' + el + '()';
     case 'assert_text': return 'page.assert_' + el + "_text('" + escQ(p) + "')";
     case 'assert_toast': return "page.assert_toast('" + escQ(p) + "')";
+    case 'wait_element': {
+      const n = parseInt(p, 10);
+      return 'page.wait_' + el + (isNaN(n) ? '()' : '(' + n + ')');
+    }
+    case 'assert_gone': return 'page.assert_' + el + '_gone()';
+    case 'if_click': {
+      const n = parseInt(p, 10);
+      return 'page.click_' + el + '_if_visible(' + (isNaN(n) ? '' : n) + ')';
+    }
+    case 'hide_keyboard': return 'page.dismiss_keyboard()';
     case 'screenshot': return "page.wait_and_shot('" + escQ(p) + "')";
     case 'tap': {
       const parts = p.split(',').map(x => x.trim()).filter(Boolean);
@@ -712,6 +894,8 @@ function pageMethodName(step) {
     click: 'click_' + el, input: 'input_' + el, long_press: 'long_press_' + el,
     assert_visible: 'assert_' + el, assert_text: 'assert_' + el + '_text',
     assert_toast: 'assert_toast', screenshot: 'wait_and_shot', tap: 'tap_xy',
+    wait_element: 'wait_' + el, assert_gone: 'assert_' + el + '_gone',
+    if_click: 'click_' + el + '_if_visible', hide_keyboard: 'dismiss_keyboard',
   }[t] || '';
 }
 /* 目标用例的页面文件（来自 /api/cases 的三件套归属信息） */
@@ -741,12 +925,19 @@ function caseLinesPreview(step) {
   return '# ' + desc + '\n' + previewLine(step);
 }
 /* 操作栏：选③时将生成到页面文件的页面方法（镜像后端 page_method_code） */
+function probeBodyLines(el, secondsVar) {
+  return "probe = CreateElement.create(self._elements." + el + ".locator_type,\n"
+    + "                             self._elements." + el + ".locator_value,\n"
+    + "                             wait_type=Wait_By.PRESENCE_OF_ELEMENT_LOCATED,\n"
+    + "                             wait_seconds=" + secondsVar + ")";
+}
 function pageMethodPreview(step) {
   const pm = pageMethodName(step);
   if (!pm) return '（该操作类型无需页面方法）';
   const el = step.element || '<元素名>';
   const doc = $('el-op-comment').value.trim() || genStepDesc(step);
   const t = step.type;
+  const p = step.param || '';
   let sig = pm, body = '';
   if (t === 'click') body = 'self.appOperator.click(self._elements.' + el + ')';
   else if (t === 'input') { sig += '(self, text)'; body = 'self.appOperator.sendText(self._elements.' + el + ', text)'; }
@@ -754,6 +945,25 @@ function pageMethodPreview(step) {
   else if (t === 'assert_visible') body = 'self.appOperator.getElement(self._elements.' + el + ')';
   else if (t === 'assert_text') { sig += '(self, expected)'; body = "assert self.appOperator.getText(self._elements." + el + ") == expected, '" + escQ(doc) + "'"; }
   else if (t === 'assert_toast') { sig += '(self, text)'; body = "assert self.appOperator.is_toast_visible(text, wait_seconds=5), '" + escQ(doc) + "'"; }
+  else if (t === 'wait_element') {
+    const n = parseInt(p, 10);
+    sig += '(self, timeout_seconds=' + (isNaN(n) ? 60 : n) + ')';
+    body = probeBodyLines(el, 'timeout_seconds') + '\nself.appOperator.getElement(probe)';
+  }
+  else if (t === 'assert_gone') {
+    sig += '(self, wait_seconds=2)';
+    body = probeBodyLines(el, 'wait_seconds') + '\ngone = True\ntry:\n    self.appOperator.getElement(probe)\n    gone = False\nexcept Exception:\n    pass\n'
+      + "self.appOperator.assert_true_with_shot('" + escQ(doc) + "', gone,\n"
+      + "                                   '等待' + str(wait_seconds) + '秒内元素仍可见')";
+  }
+  else if (t === 'if_click') {
+    const n = parseInt(p, 10);
+    sig += '(self, timeout_seconds=' + (isNaN(n) ? 3 : n) + ')';
+    body = probeBodyLines(el, 'timeout_seconds') + '\ntry:\n    self.appOperator.click(self.appOperator.getElement(probe))\nexcept Exception:\n    pass';
+  }
+  else if (t === 'hide_keyboard') {
+    body = 'try:\n    if self.appOperator.is_keyboard_shown():\n        self.appOperator.hide_keyboard()\nexcept Exception:\n    self.appOperator.press_keycode(4)\nimport time\ntime.sleep(1)';
+  }
   else if (t === 'screenshot') { sig += '(self, tag)'; body = 'import time\ntime.sleep(1)\nself.appOperator.get_screenshot(tag)'; }
   else if (t === 'tap') { sig += '(self, x, y)'; body = 'self.appOperator.tap(x, y)'; }
   return 'def ' + sig + ':\n    """' + doc + '"""\n    ' + body.replace(/\n/g, '\n    ');
@@ -767,6 +977,8 @@ function updatePreview() {
     element: $('el-name').value.trim() || '<元素名>',
     param: $('el-op-param').value.trim(),
   };
+  // 步骤列表的「本步」描述跟随类型/参数/描述实时刷新（避免列表里还挂着旧类型文案）
+  if (p !== 'only') renderStepsList(currentSteps());
   // 用例代码 / 页面方法：按用途显示
   if (p === 'only') {
     $('el-code-case').textContent = '';

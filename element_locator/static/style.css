@@ -13,6 +13,19 @@ body {
   display: flex; align-items: stretch;
 }
 
+/* ---------- 内嵌模式（被平台 iframe 嵌入）：隐藏自带侧栏避免与平台侧栏形成双栏，
+   侧栏功能件（刷新/快速打开/设备状态）由 index.js 移入顶部工具条 ---------- */
+html.embedded .side { display: none; }
+html.embedded body { flex-direction: column; }
+.embed-bar { display: none; }
+html.embedded .embed-bar {
+  display: flex; flex: 0 0 auto; width: 100%; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 6px 10px; background: #1f2937; border-radius: 8px;
+}
+#embed-bar .bar-label { font-size: 12px; color: #9ca3af; }
+#embed-bar .dev-info { margin-left: auto; font-size: 12px; }
+html.night .embed-bar { background: #1b1c1f; border: 1px solid rgba(255,255,255,.06); }
+
 /* ---------- 布局：左侧边栏（与测试平台一致）+ 右侧三栏主内容 ---------- */
 .side {
   width: 200px; flex: 0 0 200px; height: 100vh; position: sticky; top: 0;
@@ -44,6 +57,8 @@ body {
 .hdr-select:hover, .hdr-select:focus { background: #4338ca; border-color: #6366f1; }
 .hdr-select option { color: #1f2937; background: #fff; }
 .side-btn { width: 100%; padding: 9px 12px; font-size: 13.5px; }
+/* 内嵌工具条里的刷新按钮：恢复自适应宽（side-btn 的 100% 宽只属于侧栏场景） */
+#embed-bar .side-btn { width: auto; flex: 0 0 auto; padding: 5px 14px; }
 .side-foot {
   margin-top: auto; padding: 12px 4px 2px; border-top: 1px solid rgba(255,255,255,.12);
   display: flex; flex-direction: column;
@@ -66,7 +81,8 @@ body {
 /* ---------- 窄屏：三栏纵向堆叠（侧栏保持，栏内给固定可视高度） ---------- */
 @media (max-width: 920px) {
   main { flex-direction: column; overflow: auto; }
-  .left, .middle, .right { flex: 0 0 auto; }
+  .left, .middle, .right { flex: 0 0 auto; min-width: 0; }
+  .col-resizer { display: none; }   /* 纵向堆叠时横向拖拽无意义 */
   .left .shot-wrap { height: 46vh; }
   .middle .tree { max-height: 38vh; }
   .right .tutorials { max-height: 40vh; }
@@ -83,16 +99,33 @@ body {
 .btn.small { padding: 3px 10px; font-size: 12px; }
 
 /* ---------- 三栏 ---------- */
-main { flex: 1; display: flex; gap: 10px; padding: 10px 12px; min-height: 0; }
-.col { display: flex; flex-direction: column; background: #fff; border-radius: 8px; overflow: hidden; }
+main { flex: 1; display: flex; gap: 10px; padding: 10px 12px; min-height: 0; min-width: 0; overflow: hidden; }
+/* min-width:0 关键：flex 子项默认 min-width:auto，长代码行会把整行撑出横向滚动条；
+   归零后各栏保持自身宽度，超宽内容在栏内换行/滚动（tut-code 已 pre-wrap） */
+.col { display: flex; flex-direction: column; background: #fff; border-radius: 8px; overflow: hidden; min-width: 0; }
 .col-title {
   padding: 8px 12px; font-weight: 600; border-bottom: 1px solid #eee;
   background: #fafafa; flex: 0 0 auto;
 }
 .col-title .hint { font-weight: 400; font-size: 12px; color: #9ca3af; margin-left: 8px; }
-.left  { flex: 0 0 40%; }
-.middle{ flex: 0 0 34%; }
-.right { flex: 1; }
+/* 左/中栏按百分比分宽但允许收缩（shrink:1）：空间不足时收到 280px 下限，
+   不会把 main 撑出横向滚动（不可收缩的 % 基准会与右栏 min-width 形成撑宽反馈） */
+.left  { flex: 0 1 40%; min-width: 280px; }
+.middle{ flex: 0 1 34%; min-width: 280px; }
+.right { flex: 1 1 0; min-width: 280px; }
+
+/* ---------- 三栏拖拽调宽手柄：拖动时相邻两栏宽度此消彼长，内容等比跟随 ---------- */
+.col-resizer { flex: 0 0 10px; cursor: col-resize; position: relative; align-self: stretch; }
+.col-resizer::after {
+  content: ''; position: absolute; left: 4px; top: 22%; bottom: 22%; width: 2px;
+  border-radius: 1px; background: #d1d5db; transition: background .15s, top .15s, bottom .15s;
+}
+.col-resizer:hover::after, .col-resizer.dragging::after { background: #2563eb; top: 8%; bottom: 8%; }
+html.night .col-resizer::after { background: #374151; }
+html.night .col-resizer:hover::after, html.night .col-resizer.dragging::after { background: #60a5fa; }
+/* 拖拽中：全局禁选中文字 + 光标保持，避免拖到文本上光标闪烁 */
+body.col-resizing { user-select: none; cursor: col-resize; }
+body.col-resizing * { cursor: col-resize !important; }
 
 /* ---------- 左：截图 ---------- */
 .shot-wrap { position: relative; flex: 1; overflow: auto; background: #eef0f3; }
@@ -212,7 +245,16 @@ main { flex: 1; display: flex; gap: 10px; padding: 10px 12px; min-height: 0; }
 .flow-col .col-head { font-weight: 600; font-size: 13px; color: #111827; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid #e5e7eb; }
 .flow-col .col-head .hint { font-weight: 400; font-size: 12px; color: #9ca3af; margin-left: 4px; }
 .flow-col.dim { opacity: .45; pointer-events: none; }
+/* 元素栏「此操作不依赖元素」弱化：只降透明度不禁交互（元素本身仍需填写入库） */
+.flow-col.soft { opacity: .6; }
+.flow-col.soft .col-head::after { content: '（此操作类型不依赖元素，元素仍会照常入库）'; font-weight: 400; font-size: 11px; color: #9ca3af; margin-left: 4px; }
+html.night .flow-col.soft .col-head::after { color: #6b7280; }
 .op-note { font-size: 12px; color: #1d4ed8; margin: 2px 0 8px; min-height: 16px; }
+/* 操作类型下拉弹层：分组标题（基本操作/断言/长流程）白色加粗；
+   弹层统一深底，保证日间/夜间模式下白字都清晰可读 */
+#el-op-type optgroup, #el-op-type option { background: #232428; }
+#el-op-type optgroup { color: #ffffff; font-weight: 700; }
+#el-op-type option { color: #e5e7eb; }
 /* 栏内示例代码：小高度、不抢主预览的戏 */
 /* 栏内示例代码：长行自动换行（不横向滚动、不加宽），允许更高 */
 .el-content.mini { max-height: 220px; min-height: 60px; font-size: 11.5px; padding: 8px 10px;
@@ -297,6 +339,9 @@ html.night .theme-fab:hover { background: rgba(255,255,255,.16); }
 /* 夜间模式（html.night）：黑色居多；日间=默认浅色（上方基础样式）。
    设备截图、元素树的文字配色按块逐一翻转，截图本身保持原色不受影响 */
 html.night { color-scheme: dark; }
+/* 日间模式覆回 light：head 里的 <meta color-scheme=dark> 只为加载期画布不闪白，
+   主题确定后日间模式的表单控件（下拉/输入框弹层）仍按浅色渲染 */
+html:not(.night) { color-scheme: light; }
 html.night body { background: #101012; color: #e5e7eb; }
 html.night .side { background: #17181b; }
 html.night .brand .bt { color: #f3f4f6; }

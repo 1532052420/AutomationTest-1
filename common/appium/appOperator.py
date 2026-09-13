@@ -110,7 +110,11 @@ class AppOperator:
             return webElement.text
 
     def _element_desc(self,element):
-        """生成元素描述(用于日志/allure step)，如 [id:com.xxx:id/btn]"""
+        """生成元素描述(用于日志/allure step)。
+        元素定义了业务名称（desc，来自元素定位器「元素备注」）时优先显示中文名，
+        如「登录按钮」；否则回退定位信息 [id:com.xxx:id/btn]。"""
+        if isinstance(element, ElementInfo) and getattr(element, 'desc', None):
+            return str(element.desc)
         locator_type=getattr(element,'locator_type','')
         locator_value=getattr(element,'locator_value','')
         return '[%s:%s]'%(locator_type,locator_value)
@@ -550,6 +554,12 @@ class AppOperator:
                     try:
                         self.getElement(toast_element)
                         logger.info('toast「%s」出现'%text)
+                        # toast 存活窗口仅 1.5~3.5s，而断言后的常规截图与此刻有 1~3s 时差，
+                        # 截图执行时 toast 多半已消失——命中瞬间立即截图固定现场（含 toast 画面）
+                        try:
+                            self.get_screenshot('toast现场_%s' % text)
+                        except Exception:
+                            pass
                         return True
                     except:
                         return False

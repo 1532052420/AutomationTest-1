@@ -3,10 +3,28 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- color-scheme=dark：声明浏览器加载期画布底色为深色。从平台跳转过来时「旧页销毁→新页首帧」
+     的空档浏览器默认画纯白（就是那一下刺眼的白闪），声明后该空档也是深色。 -->
+<meta name="color-scheme" content="dark">
 <title>App 元素定位器 · AutomationTest</title>
-<link rel="stylesheet" href="/static/style.css">
+<script>
+/* 首帧前恢复主题：夜间模式在样式表加载前同步挂 night 类 + 给根节点上深色底，
+   双保险保证第一帧就是深色（日间模式由 CSS 的 color-scheme:light 覆回，见 style.css）。
+   内嵌检测：被平台 iframe 嵌入时挂 embedded 类，首帧即隐藏自带侧栏（避免与平台侧栏形成双栏），
+   侧栏里的功能件（刷新/快速打开/设备状态）由 index.js 移到顶部工具条。 */
+try {
+  var _de = document.documentElement;
+  if (localStorage.getItem('locator_theme') === 'night') {
+    _de.classList.add('night');
+    _de.style.background = '#101012';
+  }
+  if (window.self !== window.top) _de.classList.add('embedded');
+} catch (e) { /* 隐私模式等场景忽略 */ }
+</script>
+<link rel="stylesheet" href="/static/style.css?v=35">
 </head>
 <body>
+<div id="embed-bar" class="embed-bar"></div>
 <aside class="side">
   <a class="back-platform" href="http://127.0.0.1:8080/">🏠 返回平台</a>
   <div class="brand">🎯
@@ -46,6 +64,7 @@
       <button id="cont-add-chip" class="cont-add-chip" style="display:none" title="点击退出连续添加">🔁 连续添加中 · 点截图选下一个元素 · 点此退出</button>
     </div>
   </section>
+  <div class="col-resizer" data-resize="left" title="拖动调整左右两栏宽度"></div>
 
   <!-- 中：元素树 + 详情 -->
   <section class="col middle">
@@ -66,6 +85,7 @@
       <div id="locators"></div>
     </div>
   </section>
+  <div class="col-resizer" data-resize="middle" title="拖动调整中间与教学栏宽度"></div>
 
   <!-- 右：操作教学 -->
   <section class="col right">
@@ -128,7 +148,7 @@
           <label>目标用例文件 <span class="help-icon" data-help="操作代码行追加到哪个用例文件（test_*.py）。下拉列出现有用例文件；还没有的话可在测试平台管理后台上传，或在 cases/app_ui/android/demoProject/ 下按框架格式创建——③需要该用例已有页面对象才能联动。">?</span>
             <select id="el-case-file"></select>
           </label>
-          <label>目标方法 <span class="help-icon" data-help="追加到用例文件里的哪个测试方法（def test_xxx）体末尾，不影响已有步骤。">?</span>
+          <label>目标测试方法 <span class="help-icon" data-help="这步操作的代码行（如 page.click_qs_frame()）追加到用例文件里哪个 def test_xxx 测试方法的末尾。注意：页面操作方法不用在这里选——它由③的操作类型+元素名称自动生成（如 click_qs_frame），并自动写入目标用例绑定的页面文件（见③「写入页面文件」）。">?</span>
             <select id="el-case-method"></select>
           </label>
           <label>用例备注 <span class="help-icon" data-help="这一步在用例里的注释（如「第3步：点登录」），写在追加代码行的上一行，读用例时一眼看懂每步在干嘛。可不填——留空会自动生成（如「点击 login_btn」）。">?</span>
@@ -146,10 +166,10 @@
         <!-- 第三栏：操作 -->
         <section class="flow-col" id="col-op">
           <div class="col-head">③ 操作 <span class="hint">对这个元素做什么</span></div>
-          <label>操作类型 <span class="help-icon" data-help="保存后要「对这个元素做什么」，决定生成的代码：点击 → page.click_元素名()；输入 → page.input_元素名('内容')；断言… → 校验结果。断言也是操作的一种：框架把断言逻辑封装在页面方法里（Page Object 惯例），用例只调用 page.assert_xxx()。不需要参数的类型参数框自动隐藏。">?</span>
+          <label>操作类型 <span class="help-icon" data-help="保存后要「对这个元素做什么」，决定生成的代码。按分组找：基本操作=点击/输入/长按/坐标/截图/固定等待；断言=存在/文本/Toast/消失（弹窗关了才算过）；长流程=轮询等待出现（生成中/加载慢）、出现才点击（偶发弹窗分支）、收起键盘。断言也是操作的一种：框架把断言逻辑封装在页面方法里（Page Object 惯例），用例只调用 page.assert_xxx()。不需要参数的类型参数框自动隐藏。">?</span>
             <select id="el-op-type"></select>
           </label>
-          <label id="el-op-param-wrap">操作参数 <span class="help-icon" data-help="操作需要的额外内容：输入→文本；断言Toast→toast 文案；断言文本→期望文字；坐标点击→x,y；等待→秒数；截图→截图名。不需要时自动隐藏。">?</span>
+          <label id="el-op-param-wrap">操作参数 <span class="help-icon" data-help="操作需要的额外内容：输入→文本；断言Toast→toast 文案；断言文本→期望文字；坐标点击→x,y；轮询等待出现→最长等待秒数（超时用例失败）；出现才点击→探测秒数（没出现就跳过）；固定等待→秒数；截图→截图名。不需要时自动隐藏。">?</span>
             <input id="el-op-param" type="text" placeholder="输入内容 / 期望文本 / toast文本 / 坐标(x,y) / 秒数">
           </label>
           <label>步骤描述 <span class="help-icon" data-help="这一步做了什么（如「点击消息进入消息详情」），生成到用例注释和页面方法说明里，测试报告里也按它显示。已按元素文本自动生成，报告需要更友好的文字时再改；留空也会自动补。">?</span>
@@ -159,7 +179,7 @@
             <input id="el-page-file" type="text" readonly placeholder="选择目标用例后自动带出">
           </label>
           <div id="op-note" class="op-note"></div>
-          <div class="pv-title">页面方法代码 <span class="hint">实时 · 选③时生成</span></div>
+          <div class="pv-title">页面方法代码 <span class="hint">实时 · 选③时生成 · 方法名=操作类型+元素名，自动写入上面的页面文件</span></div>
           <pre id="el-code-preview" class="el-content mini"></pre>
         </section>
       </div>
@@ -202,6 +222,6 @@
 <!-- 字段帮助气泡（点击问号显示） -->
 <div id="help-tip" class="help-tip" style="display:none"></div>
 
-<script src="/static/index.js?v=25"></script>
+<script src="/static/index.js?v=36"></script>
 </body>
 </html>

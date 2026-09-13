@@ -1,4 +1,4 @@
-/* App UI 自动化测试平台 v1.1 · 前端逻辑 */
+/* App UI 自动化测试平台 v1.2 · 前端逻辑 */
 'use strict';
 
 /* ---------------- 基础工具 ---------------- */
@@ -93,7 +93,7 @@ function renderSidebar(active) {
     ['/locator', '🎯', '元素定位器'],
   ];
   sb.innerHTML =
-    '<div class="brand"><div class="logo">🤖</div><div>AppUI 自动化<br><small>测试平台 v1.1</small></div></div>' +
+    '<div class="brand"><div class="logo">🤖</div><div>AppUI 自动化<br><small>测试平台 v1.2</small></div></div>' +
     '<nav>' + items.map(([href, ico, name]) =>
       '<a href="' + href + '" class="' + (href === active ? 'on' : '') + '"><span class="ico">' + ico + '</span>' + name + '</a>'
     ).join('') + '</nav>' +
@@ -103,30 +103,8 @@ function renderSidebar(active) {
     '</div>';
   pollFootStatus();
   setInterval(pollFootStatus, 10000);
-  // 元素定位器智能启动：点击先探测/拉起服务（按钮 loading），就绪后打开页面
-  const locatorLink = sb.querySelector('a[href="/locator"]');
-  if (locatorLink) locatorLink.addEventListener('click', async (e) => {
-    e.preventDefault();
-    const link = e.currentTarget;
-    if (link.dataset.busy) return;
-    link.dataset.busy = '1';
-    const orig = link.innerHTML;
-    link.innerHTML = '<span class="ico">⏳</span> 启动中…';
-    try {
-      const d = await postJson('/api/locator/start', {});
-      if (d.ok) {
-        toast(d.started ? '元素定位器服务已启动' : '元素定位器已在运行');
-        window.open(d.url, '_blank');
-      } else {
-        toast('元素定位器启动失败: ' + (d.msg || ''), false);
-      }
-    } catch (err) {
-      toast('启动请求异常: ' + err, false);
-    } finally {
-      link.innerHTML = orig;
-      delete link.dataset.busy;
-    }
-  });
+  /* 元素定位器入口：/locator 已是平台内嵌页（iframe 加载，无整页白闪），普通跳转即可；
+     服务未启动时由 /locator 页面自己调用 /api/locator/start 拉起 */
 }
 
 async function pollFootStatus() {
@@ -602,6 +580,33 @@ async function renderRunDetail(sel, runId) {
   const cases = c.ok ? c.cases : [];
   const running = t.status === 'RUNNING' || t.status === 'PENDING';
   const isCli = t.source === 'cli';   // 命令行执行导入：无平台实时日志，不能生成报告/删除
+  // 按用例文件维度分组（用例文件 = 一个项目的用例集合，执行也按文件为单位）
+  const groups = [];
+  const byFile = {};
+  cases.forEach((c2, i) => {
+    const file = (c2.full_name || c2.name).split('::')[0] || '（未知文件）';
+    if (!byFile[file]) { byFile[file] = []; groups.push(file); }
+    byFile[file].push({ c: c2, i: i });
+  });
+  const groupRows = groups.map(f => {
+    const list = byFile[f];
+    const p = list.filter(x => x.c.status === 'passed').length;
+    const fl = list.filter(x => x.c.status === 'failed').length;
+    const br = list.filter(x => x.c.status === 'broken').length;
+    const sk = list.filter(x => x.c.status === 'skipped').length;
+    const stat = [p + ' 过', fl + ' 失败', br + ' 异常', sk + ' 跳过'].filter((s, k) => [p, fl, br, sk][k] > 0).join(' · ');
+    const fileName = f.split('/').pop();
+    return '<tr class="file-group-row"><td colspan="5">📁 <b>' + esc(fileName) + '</b>' +
+      '<span class="muted" style="margin-left:8px">' + esc(f) + '</span>' +
+      '<span class="muted" style="margin-left:auto">' + list.length + ' 条' + (stat ? ' · ' + stat : '') + '</span></td></tr>' +
+      list.map(x => caseRowHtml(runId, x.c, x.i)).join('');
+  }).join('');
+  const emptyText = running ? '执行进行中，用例数据产生后在此展示'
+    : (t.status === 'STOPPED' ? '执行被停止，未产生用例结果数据（停止过早，用例尚未执行完任何一条）'
+    : '该 run 没有用例数据（allure-results 缺失或已删除）');
+  const casesHtml = cases.length ? '<div class="tblwrap mt"><table><thead><tr><th></th><th>用例</th><th>结果</th><th>耗时</th><th>截图</th></tr></thead><tbody>' +
+      groupRows + '</tbody></table></div>' :
+      '<div class="empty mt"><span class="eico">📄</span>' + esc(emptyText) + '</div>';
   box.innerHTML =
     '<div class="card">' +
     '<div class="cardhead"><h3>用例执行记录 <span class="muted">· ' + esc(runId) + '</span>' +
@@ -617,10 +622,7 @@ async function renderRunDetail(sel, runId) {
     runStatsHtml(t) +
     (running ? '<span class="pill ok">执行中</span>' : '') + '</div>' +
     (t.error_msg ? '<p class="mt" style="color:#ff8787">' + esc(t.error_msg) + '</p>' : '') +
-    (cases.length ? '<div class="tblwrap mt"><table><thead><tr><th></th><th>用例</th><th>结果</th><th>耗时</th><th>截图</th></tr></thead><tbody>' +
-      cases.map((c2, i) => caseRowHtml(runId, c2, i)).join('') +
-      '</tbody></table></div>' :
-      '<div class="empty mt"><span class="eico">📄</span>该 run 没有用例数据（allure-results 缺失或已删除）</div>') +
+    casesHtml +
     '</div>' +
     '<div class="card"><div class="cardhead"><h3>执行日志 <span class="muted" id="logCount"></span>' +
     '<button class="ghost mini" id="btnCopyLog" style="margin-left:10px">📋 复制日志</button></h3></div>' +
@@ -746,8 +748,13 @@ async function loadReportList() {
   if (_reportPage < 1) _reportPage = 1;
   const slice = runs.slice((_reportPage - 1) * PAGE_SIZE, _reportPage * PAGE_SIZE);
   tb.innerHTML = slice.map(r => {
+    const files = (r.evidence && r.evidence.files) || [];
+    const fileTxt = files.length
+      ? files.slice(0, 2).join('、') + (files.length > 2 ? ' 等' + files.length + '个文件' : '')
+      : '';
     return '<tr>' +
-    '<td><a class="runlink" href="/runs/' + esc(r.run_id) + '" title="原始编号: ' + esc(r.run_id) + '">' + esc(formatRunId(r.run_id)) + '</a></td>' +
+    '<td><a class="runlink" href="/runs/' + esc(r.run_id) + '" title="原始编号: ' + esc(r.run_id) + '">' + esc(formatRunId(r.run_id)) + '</a>' +
+    (fileTxt ? '<div class="muted" style="font-size:11.5px;margin-top:2px">' + esc(fileTxt) + '</div>' : '') + '</td>' +
     '<td>' + fmtTime(r.start_time) + '</td>' +
     '<td>' + statusBadge(r.status) + '</td>' +
     '<td class="attach-cell" data-run="' + esc(r.run_id) + '"><span class="muted">…</span></td>' +

@@ -8,6 +8,7 @@
 """
 import glob
 import json
+import re
 import os
 
 RUNS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'output', 'runs')
@@ -103,7 +104,7 @@ def run_stats(results_dir):
     目录不存在返回 None（调用方显示 —）。"""
     if not results_dir or not os.path.isdir(results_dir):
         return None
-    stats = {'shots': 0, 'videos': 0}
+    stats = {'shots': 0, 'videos': 0, 'files': []}
 
     def count_ats(ats):
         for a in ats or []:
@@ -124,9 +125,18 @@ def run_stats(results_dir):
                 d = json.load(f)
         except Exception:
             continue
+        # allure fullName 为点分格式（如 cases...demoProject.test_login.TestClass#test_xxx），
+        # 用例文件名 = 类名前那个以 test_ 开头的模块段 + .py（方法名在 # 之后，排除误匹配）
+        full = (d.get('fullName') or '').replace('#', '.')
+        m = re.search(r'(test_[A-Za-z0-9_]+)\.', full + '.')
+        if m:
+            f = m.group(1) + '.py'
+            if f not in stats['files']:
+                stats['files'].append(f)
         raw_steps = d.get('steps') or []
         walk(raw_steps)
         count_ats(d.get('attachments'))
+    stats['files'] = sorted(stats['files'])
     return stats
 
 

@@ -120,7 +120,9 @@ class ExecutionManager(object):
                 mem_ids.add(t['run_id'])
                 tasks = [x for x in tasks if x['run_id'] != t['run_id']]
                 tasks.append(self._public_task(t))
-            tasks.sort(key=lambda t: t['run_id'], reverse=True)
+            # 按开始时间倒序（新在前）。按 run_id 排会错：cli- 前缀字母序永远大于日期序号，
+            # 导致旧 CLI 记录压在新执行上面。无开始时间的（中断伪记录）排最后。
+            tasks.sort(key=lambda t: t.get('start_time') or '', reverse=True)
             return tasks[:limit]
 
     def running_task(self):

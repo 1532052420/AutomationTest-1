@@ -18,14 +18,21 @@ PAGES_DIR = 'page_objects/app_ui/android/demoProject/pages'
 IND = '    '  # 类内方法缩进（4 空格，与框架一致）
 
 # 步骤类型清单（前端下拉与此一致）
+# 长流程用例四件套：wait_element(轮询等待出现) / assert_gone(断言消失) /
+# hide_keyboard(收起键盘) / if_click(分支·出现才点击)——写歌全流程等含等待/分支的
+# 用例不再需要脱离工具手写（2026-09 复盘沉淀）
 STEP_TYPES = [
     'click', 'input', 'long_press', 'assert_visible', 'assert_text',
-    'assert_toast', 'screenshot', 'tap', 'sleep', 'custom',
+    'assert_toast', 'wait_element', 'assert_gone', 'if_click',
+    'screenshot', 'tap', 'sleep', 'hide_keyboard', 'custom',
 ]
 
-
 # 页面里固定实现的工具方法：已存在则不重复生成
-TOOL_METHODS = {'wait_and_shot', 'tap_xy', 'assert_toast'}
+TOOL_METHODS = {'wait_and_shot', 'tap_xy', 'assert_toast', 'dismiss_keyboard'}
+
+# 需要构造探针元素（CreateElement/Locator_Type/Wait_By）的步骤类型：
+# 生成页面方法时页面文件缺这三个 import 会自动补齐
+PROBE_STEP_TYPES = {'wait_element', 'assert_gone', 'if_click'}
 
 
 def list_case_files():
@@ -75,9 +82,13 @@ def step_desc(step):
         'assert_visible': '断言%s出现' % el,
         'assert_text': '断言%s文本为「%s」' % (el, p),
         'assert_toast': '断言toast「%s」' % p,
+        'wait_element': '等待【%s】出现（最长%s秒）' % (el, p or 60),
+        'assert_gone': '断言【%s】已消失' % el,
+        'if_click': '若【%s】出现则点击（最长等%s秒）' % (el, p or 3),
         'screenshot': '截图：%s' % p,
         'tap': '点击坐标(%s)' % p,
         'sleep': '等待%s秒' % p,
+        'hide_keyboard': '收起键盘',
         'custom': (p or '自定义代码').splitlines()[0],
     }.get(t, '未定义步骤')
 
@@ -88,6 +99,17 @@ def _method_block(name, doc, args, body):
     body_ind = '\n'.join((IND * 2 + line) if line.strip() else line for line in body.split('\n'))
     return '%sdef %s(%s):\n%s"""%s"""\n%s\n' % (
         IND, name, args_str, IND * 2, doc, body_ind)
+
+
+def _probe_body_lines(element_name, seconds_var='timeout_seconds'):
+    """构造探针元素代码体：复用元素库定义的定位（元素改定义方法不用改）。
+    seconds_var：等待秒数变量名，须与页面方法签名参数一致。"""
+    return (
+        "probe = CreateElement.create(self._elements.%s.locator_type,\n"
+        "                             self._elements.%s.locator_value,\n"
+        "                             wait_type=Wait_By.PRESENCE_OF_ELEMENT_LOCATED,\n"
+        "                             wait_seconds=%s)"
+    ) % (element_name, element_name, seconds_var)
 
 
 def page_method_code(step):
@@ -114,6 +136,47 @@ def page_method_code(step):
     if t == 'assert_toast':
         return _method_block('assert_toast', desc, ['text'],
                              "assert self.appOperator.is_toast_visible(text, wait_seconds=5), '%s'" % desc)
+    if t == 'wait_element':
+        # 轮询等待元素出现：探针按 PRESENCE 等待 timeout_seconds，超时 getElement 抛错=用例失败
+        try:
+            timeout = int(step.get('param'))
+        except (TypeError, ValueError):
+            timeout = 60
+        body = _probe_body_lines(el) + '\nself.appOperator.getElement(probe)'
+        return _method_block('wait_%s' % el, desc, ['timeout_seconds=%d' % timeout], body)
+    if t == 'assert_gone':
+        # 断言元素消失：探针短等待内仍找得到=失败（assert_true_with_shot 截图存证）
+        body = (_probe_body_lines(el, 'wait_seconds') + '\n'
+                + 'gone = True\n'
+                + 'try:\n'
+                + '    self.appOperator.getElement(probe)\n'
+                + '    gone = False\n'
+                + 'except Exception:\n'
+                + '    pass\n'
+                + "self.appOperator.assert_true_with_shot('%s', gone,\n" % desc
+                + "                                   '等待%s秒内元素仍可见' % wait_seconds)")
+        return _method_block('assert_%s_gone' % el, desc, ['wait_seconds=2'], body)
+    if t == 'if_click':
+        # 分支：元素出现才点击（探测超时不算失败，用例继续——用于「首发布弹窗」类分支处理）
+        try:
+            probe_sec = int(step.get('param'))
+        except (TypeError, ValueError):
+            probe_sec = 3
+        body = (_probe_body_lines(el) + '\n'
+                + 'try:\n'
+                + '    self.appOperator.click(self.appOperator.getElement(probe))\n'
+                + 'except Exception:\n'
+                + '    pass')
+        return _method_block('click_%s_if_visible' % el, desc, ['timeout_seconds=%d' % probe_sec], body)
+    if t == 'hide_keyboard':
+        body = ('try:\n'
+                + '    if self.appOperator.is_keyboard_shown():\n'
+                + '        self.appOperator.hide_keyboard()\n'
+                + 'except Exception:\n'
+                + '    self.appOperator.press_keycode(4)\n'
+                + 'import time\n'
+                + 'time.sleep(1)')
+        return _method_block('dismiss_keyboard', desc, [], body)
     if t == 'screenshot':
         return _method_block('wait_and_shot', desc, ['tag'],
                              "import time\ntime.sleep(1)\nself.appOperator.get_screenshot(tag)")
@@ -140,6 +203,21 @@ def case_step_line(step):
         return 'page.assert_%s_text(%s)' % (el, _q(p))
     if t == 'assert_toast':
         return 'page.assert_toast(%s)' % _q(p)
+    if t == 'wait_element':
+        # 秒数写进用例行所见即所得；非法输入回落页面方法默认值（不带参）
+        try:
+            return 'page.wait_%s(%d)' % (el, int(p))
+        except (TypeError, ValueError):
+            return 'page.wait_%s()' % el
+    if t == 'assert_gone':
+        return 'page.assert_%s_gone()' % el
+    if t == 'if_click':
+        try:
+            return 'page.click_%s_if_visible(%d)' % (el, int(p))
+        except (TypeError, ValueError):
+            return 'page.click_%s_if_visible()' % el
+    if t == 'hide_keyboard':
+        return 'page.dismiss_keyboard()'
     if t == 'screenshot':
         return 'page.wait_and_shot(%s)' % _q(p)
     if t == 'tap':
@@ -164,12 +242,32 @@ def _ensure_elements_import(content, elements_file, elements_class):
     """页面文件缺失元素类 import 时自动补全（class 行之前）"""
     need = 'from page_objects.app_ui.android.demoProject.elements.%s import %s' % (
         os.path.splitext(elements_file)[0], elements_class)
-    if need in content:
-        return content
+    if need not in content:
+        m = re.search(r'^(class\s+\w+[^\n]*\n)', content, re.MULTILINE)
+        if m:
+            content = content[:m.start()] + need + '\n\n' + content[m.start():]
+    return content
+
+
+# wait_element/assert_gone/if_click 页面方法里构造探针需要的三件 import（缺了跑不起来）
+_PROBE_IMPORTS = [
+    'from page_objects.createElement import CreateElement',
+    'from page_objects.app_ui.locator_type import Locator_Type',
+    'from page_objects.app_ui.wait_type import Wait_Type as Wait_By',
+]
+
+
+def _ensure_probe_imports(content):
+    """探针类步骤的页面方法用到 CreateElement/Locator_Type/Wait_By，
+    页面文件没 import 时自动补全（class 行之前，插入前压掉块尾空行保持整洁）。"""
     m = re.search(r'^(class\s+\w+[^\n]*\n)', content, re.MULTILINE)
     if not m:
         return content
-    return content[:m.start()] + need + '\n\n' + content[m.start():]
+    lines = [imp for imp in _PROBE_IMPORTS if imp not in content]
+    if not lines:
+        return content
+    head = content[:m.start()].rstrip('\n') + '\n' if content[:m.start()].strip() else ''
+    return head + '\n'.join(lines) + '\n' + content[m.start():]
 
 
 def _upsert_class_method(content, cls, method_blocks, before=None):
@@ -262,9 +360,10 @@ def method_steps(content, method_name):
 
 
 def element_usage_in_cases(element_name):
-    """元素被哪些用例文件使用：统计 page.<操作>_元素名( 调用（click/input/long_press/assert 等）。
+    """元素被哪些用例文件使用：统计 page.<操作>_元素名( 调用（click/input/long_press/assert/wait/if_click 等）。
     一个元素可被多个用例、每种操作多次引用——这是三件套的既定数据关系。"""
-    pat = re.compile(r'page\.(?:click|input|long_press|assert)_%s(?:_text)?\(' % re.escape(element_name))
+    pat = re.compile(r'page\.(?:click|input|long_press|assert|wait)_%s(?:_text|_gone|_if_visible)?\('
+                     % re.escape(element_name))
     used = []
     for f in list_case_files():
         p = os.path.join(CASES_DIR, f)
@@ -407,6 +506,9 @@ def append_code_to_method(case_file, method_name, step, gen_page_method=False, i
         if elements_file:
             pcontent = _ensure_elements_import(pcontent, elements_file,
                                                element_library.to_class_name(elements_file))
+        # 探针类步骤（wait_element/assert_gone/if_click）还要补 CreateElement 等三件 import
+        if step.get('type') in PROBE_STEP_TYPES:
+            pcontent = _ensure_probe_imports(pcontent)
         pcontent = _upsert_class_method(pcontent, page_class, [method_code])
         _write(ppath, pcontent)
         result['msg'] += '；页面方法 %s() 已生成/更新到 %s' % (mname, page_file)

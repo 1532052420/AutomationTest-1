@@ -10,3 +10,4 @@ class ElementInfo:
         self.wait_type=None
         self.wait_seconds=None
         self.wait_expected_value=None
+        self.desc=None   # 业务名称（可选）：元素定位器「元素备注」填写后，报告步骤/日志优先显示它        self.desc=None

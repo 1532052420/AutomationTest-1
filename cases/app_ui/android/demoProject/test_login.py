@@ -13,6 +13,7 @@
 # 9. 再次点击立即登录
 # 10. 断言登录成功（登录成功 toast 为主要依据；成败截图入 allure，截图即存证）
 import time
+import allure
 from base.app_ui.android.demoProject.app_ui_android_demoProject_client import APP_UI_Android_demoProject_Client
 from page_objects.app_ui.android.demoProject.pages.demoToolLoginPage import DemoToolLoginPage
 
@@ -27,6 +28,9 @@ class TestDemoToolLogin:
         time.sleep(3)
         self.page = DemoToolLoginPage(self.appOperator)
 
+    @allure.parent_suite('快歌APP自动化')
+    @allure.suite('登录流程')
+    @allure.title('手机号验证码登录全流程（含协议校验与登录成功断言）')
     def test_phone_login_flow(self):
         page = self.page
 

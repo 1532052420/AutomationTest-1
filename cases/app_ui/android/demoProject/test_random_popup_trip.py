@@ -4,6 +4,7 @@
 #       → 广场 → 消息 → 杀进程 → 我的 → 充值 → 返回 → 写歌
 # 随机弹窗验证方式：正常操作触发，处理器轮询被动识别——遇到即截图挂 allure 并关闭，无断言
 import time
+import allure
 
 from base.app_ui.android.demoProject.app_ui_android_demoProject_client import APP_UI_Android_demoProject_Client
 from page_objects.app_ui.android.demoProject.pages.popupTripPage import PopupTripPage
@@ -22,6 +23,9 @@ class TestRandomPopupTrip:
         # 前置：首启一次性弹窗处理（不算步骤，无弹窗快速跳过）
         self.page.deal_first_launch_dialogs()
 
+    @allure.parent_suite('快歌APP自动化')
+    @allure.suite('随机弹窗路径')
+    @allure.title('随机弹窗路径全流程（登录→充值往返→页签→杀进程重启→写歌，被动验证随机弹窗）')
     def test_random_popup_trip(self):
         page = self.page
 

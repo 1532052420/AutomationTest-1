@@ -53,9 +53,13 @@ def element_line(name, locator_type, value, wait_type='VISIBILITY_OF', wait_seco
     except (TypeError, ValueError):
         sec = DEFAULT_WAIT_SECONDS
     line += ', wait_seconds=%d' % sec
+    comment_text = str(comment).strip() if comment and str(comment).strip() else ''
+    if comment_text:
+        # 业务名称：报告步骤/日志优先显示它（appOperator._element_desc 读取）
+        line += ", desc='%s'" % _escape(comment_text)
     line += ')'
-    if comment and str(comment).strip():
-        line += '  # %s' % str(comment).strip().replace('\n', ' ')
+    if comment_text:
+        line += '  # %s' % comment_text.replace('\n', ' ')
     return line
 
 

@@ -23,7 +23,10 @@ html.embedded .embed-bar {
   padding: 6px 10px; background: #1f2937; border-radius: 8px;
 }
 #embed-bar .bar-label { font-size: 12px; color: #9ca3af; }
-#embed-bar .dev-info { margin-left: auto; font-size: 12px; }
+#embed-bar .dev-info { font-size: 12px; }
+/* 内嵌工具条右侧设备组：设备下拉+状态紧靠成组不换行，整体推到最右 */
+#embed-bar .dev-group { margin-left: auto; display: flex; align-items: center; gap: 8px; white-space: nowrap; flex: 0 0 auto; }
+#embed-bar .dev-group .dev-info { overflow: hidden; text-overflow: ellipsis; max-width: 180px; }
 html.night .embed-bar { background: #1b1c1f; border: 1px solid rgba(255,255,255,.06); }
 
 /* ---------- 布局：左侧边栏（与测试平台一致）+ 右侧三栏主内容 ---------- */
@@ -61,9 +64,13 @@ html.night .embed-bar { background: #1b1c1f; border: 1px solid rgba(255,255,255,
 #embed-bar .side-btn { width: auto; flex: 0 0 auto; padding: 5px 14px; }
 .side-foot {
   margin-top: auto; padding: 12px 4px 2px; border-top: 1px solid rgba(255,255,255,.12);
-  display: flex; flex-direction: column;
+  display: flex; flex-direction: column; gap: 8px;
 }
-.side-foot .dev-info { font-size: 12.5px; line-height: 1.6; word-break: break-all; }
+/* 设备行：标签与切换下拉同行，下拉占满剩余宽度（不再挤换行） */
+.dev-row { display: flex; align-items: center; gap: 6px; }
+.dev-row .side-label { margin: 0; white-space: nowrap; }
+.dev-row .mini-select { flex: 1 1 auto; min-width: 0; width: auto; }
+.side-foot .dev-info { font-size: 12.5px; line-height: 1.6; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dev-info { font-size: 13px; color: #d1d5db; }
 .dev-info.ok { color: #34d399; }
 .dev-info.bad { color: #f87171; }

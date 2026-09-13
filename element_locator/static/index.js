@@ -109,11 +109,18 @@ function setupEmbedBar() {
     const el = $(id);
     if (el) { el.style.maxWidth = '160px'; bar.appendChild(el); }
   });
-  const dv = $('dev-info');
-  if (dv) bar.appendChild(dv);
-  // 多设备切换下拉也搬进内嵌工具条（内嵌/独立两种形态都有设备切换入口）
+  // 右侧设备组：📱 前缀标识 + 切换下拉 + 状态，成组靠右不换行（D2 修复）
+  const group = document.createElement('span');
+  group.className = 'dev-group';
+  const devTag = document.createElement('span');
+  devTag.className = 'bar-label';
+  devTag.textContent = '📱 设备';
+  group.appendChild(devTag);
   const devSel = $('device-sel');
-  if (devSel) { devSel.style.maxWidth = '200px'; bar.appendChild(devSel); }
+  if (devSel) { devSel.style.maxWidth = '180px'; group.appendChild(devSel); }
+  const dv = $('dev-info');
+  if (dv) { dv.style.marginLeft = '0'; group.appendChild(dv); }
+  bar.appendChild(group);
 }
 
 async function init() {
@@ -129,7 +136,7 @@ async function init() {
   if (st && st.version) $('app-version').textContent = st.version;
   if (st && st.ok) {
     state.serial = st.serial || state.serial;
-    devInfo.textContent = '📱 ' + st.device.model + ' | Android ' + st.device.platformVersion;
+    devInfo.textContent = '📱 ' + st.device.model + ' · Android ' + st.device.platformVersion;
     devInfo.className = 'dev-info ok';
   } else {
     devInfo.textContent = st ? st.msg : '连接失败';
@@ -408,8 +415,13 @@ function onDeviceChange() {
   refresh();
 }
 
-/* ---------- 刷新：截图 + 元素树 ---------- */
+/* ---------- 刷新：截图 + 元素树 ----------
+   token 竞态防护：刷新期间用户切换/连切设备时，慢的旧响应若后到会覆盖新设备画面——
+   每次请求带自增 token，响应回来时 token 已不是最新 → 丢弃；
+   服务端标记 fallback（请求设备掉线回退）→ 校正下拉；其余 serial 不一致（过期响应）→ 丢弃 */
+let refreshSeq = 0;
 async function refresh() {
+  const myToken = ++refreshSeq;
   $('btn-refresh').textContent = '刷新中…'; $('btn-refresh').disabled = true;
   try {
     const r = await fetch('/api/refresh', {
@@ -417,12 +429,19 @@ async function refresh() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ serial: state.serial }),
     }).then(r => r.json()).catch(() => null);
+    if (myToken !== refreshSeq) return;          // 已有更新的刷新/切换，丢弃过期响应
     if (!r || !r.ok) {
-      alert(r && r.msg ? r.msg : '刷新失败');
+      // 失败不打断操作（不再用系统 alert）：空态区展示原因+下一步，设备下拉红色提示
+      const msg = r && r.msg ? r.msg : '刷新失败';
+      $('shot-empty').textContent = msg + '，请检查设备连接后点「刷新」重试';
+      $('shot-empty').style.display = 'block';
+      const dv = $('dev-info');
+      dv.textContent = '⚠ ' + msg;
+      dv.className = 'dev-info bad';
       return;
     }
-    // 掉线回退校正：请求的是 A，服务端回的是 B（A 已掉线）→ 更正下拉并提示
-    if (r.serial && r.serial !== state.serial) {
+    // 掉线回退校正：请求的 A 已掉线，服务端用 B 响应并标记 fallback → 更正下拉并提示
+    if (r.fallback && r.serial && r.serial !== state.serial) {
       const sel = $('device-sel');
       if (sel && sel.querySelector('option[value="' + r.serial + '"]')) {
         sel.value = r.serial;
@@ -438,7 +457,8 @@ async function refresh() {
     // 刷新成功：状态栏同步当前设备（切换设备后从「切换中…」恢复为设备信息）
     if (r.device) {
       const dv = $('dev-info');
-      dv.textContent = '📱 ' + r.device.model + ' | Android ' + r.device.platformVersion;
+      dv.textContent = '📱 ' + r.device.model + ' · Android ' + r.device.platformVersion;
+      dv.title = r.device.model + '（' + (r.serial || '') + '）';
       dv.className = 'dev-info ok';
     }
     // 统一分配 uid（DFS 先父后子，tree 与 all 顺序一致）

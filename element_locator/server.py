@@ -23,7 +23,7 @@ from tutorials import TUTORIALS, search_tutorials
 app = Flask(__name__, static_folder='static', static_url_path='/static')
 
 # 元素定位器版本号：每次功能/修复后递增，左上角会显示，用来确认本地是否已更新
-APP_VERSION = 'v3.0'
+APP_VERSION = 'v3.1'
 
 # 开发工具要能"改完即刷"，静态文件禁用浏览器强缓存（Flask 默认 max-age=12h）
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
@@ -65,8 +65,11 @@ def _request_serial():
 
 
 def _refresh_payload():
-    """截图 + 元素树 完整载荷（按前端指定的设备；设备掉线自动回退第一台）"""
-    serial = device.get_device(_request_serial())
+    """截图 + 元素树 完整载荷（按前端指定的设备；设备掉线自动回退第一台）
+    fallback=True：请求的设备已掉线、响应来自回退设备——前端据此校正下拉，
+    并与「过期响应」（用户已切到别的设备）区分开，过期响应直接丢弃防串台"""
+    asked = _request_serial()
+    serial = device.get_device(asked)
     if not serial:
         return None
     png = device.screenshot_png(serial)
@@ -82,6 +85,7 @@ def _refresh_payload():
         n['locators'] = device.gen_locators(n, data['all'])
     return {
         'serial': serial,
+        'fallback': bool(asked and serial != asked),
         'device': device.device_info(serial),
         'screenshot': 'data:image/png;base64,' + base64.b64encode(png).decode() if png else '',
         'width': data['width'],

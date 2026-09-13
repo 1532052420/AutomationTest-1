@@ -23,7 +23,7 @@ from tutorials import TUTORIALS, search_tutorials
 app = Flask(__name__, static_folder='static', static_url_path='/static')
 
 # 元素定位器版本号：每次功能/修复后递增，左上角会显示，用来确认本地是否已更新
-APP_VERSION = 'v2.24'
+APP_VERSION = 'v2.25'
 
 # 开发工具要能"改完即刷"，静态文件禁用浏览器强缓存（Flask 默认 max-age=12h）
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
@@ -293,4 +293,5 @@ if __name__ == '__main__':
     else:
         print('警告: 未检测到 Android 设备，界面将无法刷新截图（请连接手机后点"刷新"）')
     print('元素定位器已启动: http://127.0.0.1:%d/' % PORT)
-    app.run(host='127.0.0.1', port=PORT, debug=False)
+    # 0.0.0.0：接受所有网卡进入，局域网同事可直接访问
+    app.run(host='0.0.0.0', port=PORT, debug=False)

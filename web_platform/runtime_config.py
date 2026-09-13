@@ -30,7 +30,8 @@ class WebPlatformConfig(object):
     """读 config/web_platform.conf：平台端口、报告起始端口（env 可覆盖）"""
 
     def __init__(self):
-        self.port = 8080
+        # 8090：原 8080 与 mitmdump 抓包代理([::]:8080)冲突，平台绑定 0.0.0.0 时无法共存
+        self.port = 8090
         self.report_start_port = 4000
         path = os.path.join(BASE_DIR, 'config', 'web_platform.conf')
         config = ConfigParser.ConfigParser()

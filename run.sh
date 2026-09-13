@@ -9,7 +9,7 @@
 #   ./run.sh stop-appium   停止 Appium 服务
 #   ./run.sh status        Appium 服务状态
 #   ./run.sh env-check     检查设备自动化依赖（先查再装，缺才装）
-#   ./run.sh platform      启动 Web 执行平台(端口8080,后台)并打开页面
+#   ./run.sh platform      启动 Web 执行平台(端口8090,后台)并打开页面
 #   ./run.sh stop-platform 停止 Web 执行平台
 #   ./run.sh report api    生成 API 测试报告
 #   ./run.sh report app    生成 APP 测试报告
@@ -68,13 +68,13 @@ case "$1" in
     pkill -f "element_locator/server.py" 2>/dev/null && echo "元素定位器已停止" || echo "元素定位器未在运行"
     ;;
   platform)
-    if curl -s --max-time 2 http://127.0.0.1:8080/api/status >/dev/null 2>&1; then
-      echo "Web 执行平台已在运行: http://127.0.0.1:8080/"
+    if curl -s --max-time 2 http://127.0.0.1:8090/api/status >/dev/null 2>&1; then
+      echo "Web 执行平台已在运行: http://127.0.0.1:8090/"
     else
       mkdir -p logs
       nohup .venv/bin/python web_platform/app.py > logs/platform.log 2>&1 &
       sleep 3
-      echo "Web 执行平台已启动: http://127.0.0.1:8080/  日志: logs/platform.log"
+      echo "Web 执行平台已启动: http://127.0.0.1:8090/  日志: logs/platform.log"
     fi
     open http://127.0.0.1:8080/
     ;;

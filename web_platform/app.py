@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""App UI 自动化测试平台 · Web 入口（Flask :8080）
+"""App UI 自动化测试平台 · Web 入口（Flask :8090）
 
 启动：.venv/bin/python web_platform/app.py
 入口：./run.sh platform
@@ -54,5 +54,6 @@ app.register_blueprint(admin_bp)
 
 if __name__ == '__main__':
     print('App UI 自动化测试平台已启动: http://127.0.0.1:%d/' % PLATFORM_CFG.port)
-    print('  若 8080 被占用，可用环境变量 WEB_PLATFORM_PORT=<端口> 覆盖')
-    app.run(host='127.0.0.1', port=PLATFORM_CFG.port, debug=False)
+    print('  若 8090 被占用，可用环境变量 WEB_PLATFORM_PORT=<端口> 覆盖')
+    # 0.0.0.0：接受所有网卡进入，局域网同事用 http://本机IP:端口 直接访问
+    app.run(host='0.0.0.0', port=PLATFORM_CFG.port, debug=False)

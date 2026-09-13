@@ -1,4 +1,4 @@
-/* App UI 自动化测试平台 v1.2 · 前端逻辑 */
+/* App UI 自动化测试平台 v1.3 · 前端逻辑 */
 'use strict';
 
 /* ---------------- 基础工具 ---------------- */
@@ -93,7 +93,7 @@ function renderSidebar(active) {
     ['/locator', '🎯', '元素定位器'],
   ];
   sb.innerHTML =
-    '<div class="brand"><div class="logo">🤖</div><div>AppUI 自动化<br><small>测试平台 v1.2</small></div></div>' +
+    '<div class="brand"><div class="logo">🤖</div><div>AppUI 自动化<br><small>测试平台 v1.3</small></div></div>' +
     '<nav>' + items.map(([href, ico, name]) =>
       '<a href="' + href + '" class="' + (href === active ? 'on' : '') + '"><span class="ico">' + ico + '</span>' + name + '</a>'
     ).join('') + '</nav>' +

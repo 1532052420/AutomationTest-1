@@ -114,6 +114,9 @@ function setupEmbedBar() {
 
 async function init() {
   setupEmbedBar();
+  // 「返回平台」链接跟随实际访问地址（写死 127.0.0.1 的话，局域网同事点了会指向他自己机器）
+  const bp = document.querySelector('.back-platform');
+  if (bp) bp.href = location.protocol + '//' + location.hostname + ':8090/';
   const st = await fetch('/api/status').then(r => r.json()).catch(() => null);
   const devInfo = $('dev-info');
   // 版本号以服务端为准（页面缓存旧版本时也能纠正显示）

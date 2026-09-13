@@ -61,11 +61,17 @@ def _locator_up():
         return False
 
 
+def _browser_host():
+    """浏览器访问平台用的主机名/IP：跟随实际访问地址（本机访问=127.0.0.1，
+    局域网同事用 IP 访问=同一个 IP），返回给浏览器的链接据此拼，避免写死 127.0.0.1。"""
+    return (request.host or '').split(':')[0] or '127.0.0.1'
+
+
 @bp.route('/api/locator/start', methods=['POST'])
 def api_locator_start():
     """元素定位器智能启动：已运行直接返回；未运行则后台拉起并等就绪（前端按钮 loading 态）"""
     if _locator_up():
-        return jsonify({'ok': True, 'url': 'http://127.0.0.1:8001/', 'started': False})
+        return jsonify({'ok': True, 'url': 'http://%s:8001/' % _browser_host(), 'started': False})
     # 清理平台重启后注册表之外的残留进程，避免双实例抢端口
     subprocess.run(['pkill', '-f', 'element_locator/server.py'],
                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -85,7 +91,7 @@ def api_locator_start():
         if _locator_up():
             _locator_service['proc'] = proc
             log_file.close()
-            return jsonify({'ok': True, 'url': 'http://127.0.0.1:8001/', 'started': True})
+            return jsonify({'ok': True, 'url': 'http://%s:8001/' % _browser_host(), 'started': True})
         if proc.poll() is not None:
             log_file.close()
             return jsonify({'ok': False, 'msg': '元素定位器进程退出（查看 logs/element_locator.log）'}), 500
@@ -350,7 +356,7 @@ def api_open_report(run_id):
     # 服务已在跑则直接复用
     svc = _report_services.get(run_id)
     if svc and svc['proc'].poll() is None:
-        return jsonify({'ok': True, 'url': 'http://127.0.0.1:%d/' % svc['port'], 'reused': True})
+        return jsonify({'ok': True, 'url': 'http://%s:%d/' % (_browser_host(), svc['port']), 'reused': True})
     if svc:
         _report_services.pop(run_id, None)
 
@@ -368,7 +374,7 @@ def api_open_report(run_id):
         return jsonify({'ok': False, 'msg': '启动报告服务失败: %s' % e}), 500
 
     # 轮询等服务真正可访问（最多 ~8 秒），就绪才返回，前端打开即有内容
-    url = 'http://127.0.0.1:%d/' % port
+    url = 'http://%s:%d/' % (_browser_host(), port)
     deadline = time.time() + 8
     last_err = ''
     while time.time() < deadline:

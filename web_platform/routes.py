@@ -336,11 +336,13 @@ def api_open_report(run_id):
         return jsonify({'ok': False, 'msg': '任务不存在'}), 404
     report_dir = runner.manager.report_dir_for(run_id)
     index_html = os.path.join(report_dir, 'index.html')
-    # 未生成过则先生成
+    # 未生成过则先生成；已生成也补一次缩略图补丁（历史报告/旧版本生成的可能没有）
     if not os.path.isfile(index_html):
         ok, msg = runner.manager.generate_report(run_id)
         if not ok:
             return jsonify({'ok': False, 'msg': msg}), 400
+    else:
+        inject_attachment_thumbnail_patch(report_dir)
 
     # 服务已在跑则直接复用
     svc = _report_services.get(run_id)

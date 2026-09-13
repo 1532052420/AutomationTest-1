@@ -23,6 +23,7 @@ import time
 import ujson
 
 from common.pytest import deal_pytest_ini_file
+from generate_app_ui_test_report import inject_attachment_thumbnail_patch
 from web_platform.runtime_config import (
     BASE_DIR,
     adb_devices,
@@ -668,6 +669,7 @@ class ExecutionManager(object):
                     if cache:
                         cache['task']['report_dir'] = os.path.relpath(report_dir, BASE_DIR)
                     break
+            inject_attachment_thumbnail_patch(report_dir)   # 附件缩略图（截图/视频小图，点击放大）
             return True, report_dir
         with self._lock:
             task = self._tasks.get(run_id)
@@ -701,6 +703,7 @@ class ExecutionManager(object):
             self._archive(task)
         else:
             self._patch_disk_result(run_id, {'report_dir': report_rel})
+        inject_attachment_thumbnail_patch(report_dir)   # 附件缩略图（截图/视频小图，点击放大）
         return True, report_dir
 
     def _patch_disk_result(self, run_id, fields):
